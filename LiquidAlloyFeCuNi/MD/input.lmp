@@ -1,0 +1,74 @@
+units            metal 
+atom_style       atomic 
+boundary         p p p 
+
+variable       totatom equal 8000 
+variable       totatomA equal ceil(${totatom}*FRACA) #Fe
+variable       totatomB equal ceil(${totatom}*FRACB) #Cu
+variable       totatomC equal ${totatom}-${totatomB}-${totatomA} #Ni
+
+
+region box block -5 5 -5 5 -5 5
+create_box      3 box
+create_atoms    1 random ${totatomA} 43432341 NULL #Fe
+create_atoms    2 random ${totatomB} 343234 NULL #Cu
+create_atoms    3 random ${totatomC} 343231 NULL #Ni
+
+
+mass            1 55.845
+mass            2 63.546
+mass            3 58.6934
+
+variable     setndens equal 0.076 # set initial density to density of Cu
+variable     setboxlength equal (count(all)/${setndens})^(1./3.)
+change_box all x final 0.0 ${setboxlength} y final 0.0 ${setboxlength} z final 0.0 ${setboxlength} remap units box
+
+pair_style eam/alloy
+pair_coeff * * ../FeCuNi.eam.alloy Fe Cu Ni
+
+
+neighbor         0.3 bin
+neigh_modify     every 1 delay 0 check yes
+
+
+min_style cg
+minimize 1e-6 1e-4 100 100
+
+variable         dt equal 0.001
+timestep         ${dt}
+
+variable       temperature equal 3000 # units K
+variable       press equal 1 # units bar
+
+variable      timeequil equal  500000
+variable      timerun equal   2000000
+
+variable      tdamp equal 0.1 # damping time for thermostat
+variable      pdamp equal 1.0 # damping time for barostat
+
+
+velocity       all create ${temperature} 22145 dist gaussian mom yes rot yes
+
+
+thermo           100
+thermo_style     custom step temp pe ke enthalpy lx vol press 
+
+
+fix 2 all nph iso ${press} ${press} ${pdamp}
+fix 3 all temp/csvr ${temperature} ${temperature} ${tdamp} 53196
+
+run          ${timeequil}
+reset_timestep 0
+
+write_data eq.EAM
+
+dump 1 all custom 1000 traj.lammpstrj id type x y z 
+dump_modify 1 sort id 
+
+
+run          ${timerun}
+
+
+write_data final.EAM
+unfix 2
+unfix 3
