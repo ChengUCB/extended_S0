@@ -1,2 +1,42 @@
-# extended_S0
-multi-component S0 method
+Data repository for _"Chemical potentials from structure factors: I. Neutral multi-component mixtures"_
+
+This repository computes composition-dependent chemical potentials of multicomponent liquids directly from NPT molecular dynamics simulations using the extended-S0 method.
+
+## extended-S0 workflow: 
+```
+NPT MD  →  S_αβ(k)  →  S^0 = S(k→0)  →  Γ (chemical-potential derivatives)  →  ∫ → μ_i 
+                       (OZ fit)          (S0_multi)                       (GPR_grad)
+```
+1. Run NPT molecular dynamics simulations over a grid of compositions.
+2. Compute partial structure factors, Sαβ(k), from the trajectories.
+3. Extrapolate S_αβ(k) to k→0 to obtain S_αβ^0 (the examples use the OZ matrix fit).
+4. Calculate chemical-potential derivatives using the S0_multi package.
+5. Integrate the chemical-potential derivatives using the GPR_grad package with one or more reference chemical potentials.
+6. Optional: use GPR_grad's CUR point selection to identify additional compositions to simulate, as demonstrated for the Fe–Cu–Ni liquid alloy example.
+
+## Table of contents
+
+- [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — Calculates the mixing free energy of a Fe-Cu-Ni liquid alloy using the excess chemical potentials calculated with the S0 method.
+
+
+## 1.  Requirements
+
+Running the example workflows requires the following Python packages:
+
+- Python 3.10+
+- NumPy
+- SciPy
+- pandas
+- matplotlib
+- scikit-learn
+- mpltern
+- PyTorch
+
+The workflow relies on the following companion packages:
+| Package | Role | Source |
+| --- | --- | --- |
+| **S0_multi** (`szero`) | Converts fitted `S0` values into the `Γ` matrix of chemical-potential derivatives. |[GitHub](https://github.com/ChengUCB/S0_multi)|
+| **GPR_grad** (`gpr_grad`) | PyTorch Gaussian-process regression with function-value **and gradient** observations; includes CUR point selection. |[GitHub](https://github.com/ChengUCB/GPR_grad) |
+
+
+
