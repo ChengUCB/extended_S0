@@ -1,0 +1,8 @@
+# Paracetamol solubility in ethanol-water at 303.15 K.
+# Assis et al., J. Mol. Liq. 323, 114617 (2021), doi:10.1016/j.molliq.2020.114617
+"EtOH %(w/w, solute free)",x_para,x_eth(solute free),sol(Assis) (mol/kg),sol(Assis) (mol/L)
+0,0.002,0.00000,0.11124,0.11076
+25,0.0106,0.11532,0.50417,0.48200
+50,0.0353,0.28112,1.41274,1.27962
+75,0.061,0.53984,1.95912,1.65928
+100,0.059,1.00000,1.36102,1.06259
