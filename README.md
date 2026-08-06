@@ -16,7 +16,8 @@ NPT MD  →  S_αβ(k)  →  S^0 = S(k→0)  →  Γ (chemical-potential derivat
 
 ## Table of contents
 
-- [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — Calculates the mixing free energy of a Fe-Cu-Ni liquid alloy using the excess chemical potentials calculated with the S0 method.
+- [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — MD inputs, simulated S0 data, and stationary GP regression models for the Fe-Cu-Ni system.
+- [`Paracetamo-Water-Ethanol/`](Paracetamo-Water-Ethanol/) —  MD inputs, simulated S0 data, and non-stationary GP regression models for the paracetamol–water–ethanol system.
 
 
 ## 1.  Requirements
