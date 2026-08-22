@@ -1,0 +1,20 @@
+{
+  "li_input_dir": "external trajectory path (not included)",
+  "mg_coordination_source": "outputs/SelectedMgCl2-NaCl_MD_structure/coordination_distributions.csv",
+  "random_connectivity_source": "outputs/LiCl-NaCl_vs_MgCl2-NaCl_random_SRO/random_connectivity_baseline.csv",
+  "composition": "x_NaCl = N_Na / (N_Na + N_Li or N_Mg)",
+  "categories": {
+    "0": "no Li/Mg within the corresponding first-shell cutoff",
+    "1": "connected to one Li/Mg",
+    "2": "shared by two Li/Mg",
+    "3+": "shared by three or more Li/Mg"
+  },
+  "li_cutoff": "composition-specific first minimum of the Li-Cl RDF",
+  "mg_cutoff": "composition-specific first minimum of the Mg-Cl RDF from the prior analysis",
+  "discard_fraction": 0.25,
+  "li_rdf_frames": 300,
+  "li_connectivity_frames": 200,
+  "time_blocks": 5,
+  "uncertainty": "sample standard deviation across contiguous trajectory blocks",
+  "random_reference": "exact random relabeling at fixed instantaneous positions, total cation--Cl neighbor graph, and cation counts; plotted as dashed curves"
+}
