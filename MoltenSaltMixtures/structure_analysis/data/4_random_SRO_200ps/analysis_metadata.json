@@ -1,0 +1,28 @@
+{
+  "random_connectivity_reference": "For every frame, keep positions, box, total cation-Cl neighbor degree, and exact cation counts; randomize Li/Na or Mg/Na labels analytically. P(n_M|m) is the exact hypergeometric distribution, with M = Li or Mg.",
+  "delta_P": "P_MD - P_random",
+  "warren_cowley": "alpha_MNa(r) = 1 - P(Na|M,r) / [N_Na/(N_cation-1)], with M = Li or Mg; the finite-size correction makes the random-label reference exactly zero.",
+  "overall_order_metric": "mean absolute alpha over 3-10 A",
+  "long_range_metric": "mean absolute alpha over 6-10 A",
+  "neighbour_criteria": {
+    "M-Cl": "first minimum of the M-Cl RDF (species specific, SI control)",
+    "union": "max(first minimum of M-Cl, first minimum of Na-Cl); covers the first shell of both cation species, so the selected neighbours are not biased towards M"
+  },
+  "criterion_used_in_figures": "union",
+  "union_cutoff_A": {
+    "LiCl-NaCl": {
+      "mean": 4.196943810509818,
+      "composition_spread": 0.0599978459263599
+    },
+    "MgCl2-NaCl": {
+      "mean": 4.229345799932314,
+      "composition_spread": 0.054638178837699336
+    }
+  },
+  "analysis_window_ps": 200.0,
+  "frame_interval_ps": 0.4,
+  "discard_fraction": 0.25,
+  "max_frames_per_composition": 200,
+  "time_blocks": 5,
+  "uncertainty": "sample standard deviation across matched contiguous trajectory blocks"
+}

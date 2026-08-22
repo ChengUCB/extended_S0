@@ -1,0 +1,16 @@
+{
+  "input_dir": "raw_data/MgCl2-NaCl",
+  "rdf_cutoff_source": "data/1_MgCl2_RDF/mgcl_first_shell_metrics.csv",
+  "composition": "x_NaCl = N_Na / (N_Na + N_Mg)",
+  "discard_fraction": 0.25,
+  "max_frames_per_composition": 200,
+  "time_blocks": 5,
+  "tetrahedral_order": "q4 from four nearest Cl for Mg centers with CN >= 4",
+  "terminal_Cl": "n_Mg(Cl) = 1",
+  "bridging_Cl": "n_Mg(Cl) >= 2",
+  "corner_sharing": "Mg pair shares exactly one Cl",
+  "edge_or_more_sharing": "Mg pair shares at least two Cl",
+  "percolation": "non-contractible Mg-network loop in the periodic cell",
+  "warren_cowley": "alpha_MgNa(r) = 1 - P(Na|Mg,r)/x_NaCl; neighbors are cations in the radial shell",
+  "uncertainty": "sample standard deviation across contiguous trajectory blocks"
+}
