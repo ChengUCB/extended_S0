@@ -3,9 +3,6 @@
 Compute partial structure factors S(k) for molten MgCl2-NaCl straight from the
 MD trajectories, and write them in the same .dat format as sk_output/.
 
-Adapted from NaCl_project/simulations/NPT_6400/current/MACELES/sk_proc_traj.py.
-Three changes from that script:
-
   * three species (Mg, Cl, Na) instead of two, so six curves are written in the
     order MgMg, MgCl, MgNa, ClCl, ClNa, NaNa.
   * the merged "X" salt mode is not written.  The existing sk_output files do
