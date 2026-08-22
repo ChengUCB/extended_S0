@@ -1,11 +1,11 @@
-Data repository for _"Chemical potentials from structure factors: I. Neutral multi-component mixtures" and Chemical potentials from structure factors: II. Charged multi-component mixtures
+Data repository for _"Chemical potentials from structure factors: I. Neutral multi-component mixtures" and _"Chemical potentials from structure factors: II. Charged multi-component mixtures"
 
 This repository computes composition-dependent chemical potentials of multicomponent liquids directly from NPT molecular dynamics simulations using the extended-S0 method.
 
 ## extended-S0 workflow: 
 ```
 NPT MD  →  S_αβ(k)  →  S^0 = S(k→0)  →  Γ (chemical-potential derivatives)  →  ∫ → μ_i 
-                       (OZ fit)          (S0_multi)                       (GPR_grad)
+                       (OZ/BC fit)          (S0_multi)                       (GPR_grad)
 ```
 1. Run NPT molecular dynamics simulations over a grid of compositions.
 2. Compute partial structure factors, Sαβ(k), from the trajectories.
@@ -15,12 +15,13 @@ NPT MD  →  S_αβ(k)  →  S^0 = S(k→0)  →  Γ (chemical-potential derivat
 6. Optional: use GPR_grad's CUR point selection to identify additional compositions to simulate, as demonstrated for the Fe–Cu–Ni liquid alloy example.
 
 ## extended-S0 for charged systems 
-For charged systems we follow the same general workflow. However, step 3 is modified to use the BC matrix fit.
+For charged systems we follow the same general workflow. However, step 3 is modified to use the Bare Coulomb (BC) fit and charges need to be included when using the S0_multi package. 
 
 ## Table of contents
 
 - [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — MD inputs, simulated S0 data, and stationary GP regression models for the Fe-Cu-Ni system.
 - [`Paracetamo-Water-Ethanol/`](Paracetamo-Water-Ethanol/) —  MD inputs, simulated S0 data, and non-stationary GP regression models for the paracetamol–water–ethanol system.
+- [`MoltenSaltMixtures/`](MoltenSaltMixtures/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis 
 
 
 ## 1.  Requirements
