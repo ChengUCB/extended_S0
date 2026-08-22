@@ -21,7 +21,7 @@ For charged systems we follow the same general workflow. However, step 3 is modi
 
 - [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — MD inputs, simulated S0 data, and stationary GP regression models for the Fe-Cu-Ni system.
 - [`Paracetamo-Water-Ethanol/`](Paracetamo-Water-Ethanol/) —  MD inputs, simulated S0 data, and non-stationary GP regression models for the paracetamol–water–ethanol system.
-- [`MoltenSaltMixtures/`](MoltenSaltMixtures/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis 
+- [`Molten_Salts/`](Molten_Salts/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis 
 
 
 ## 1.  Requirements
