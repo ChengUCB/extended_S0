@@ -1,4 +1,6 @@
-Data repository for _"Chemical potentials from structure factors: I. Neutral multi-component mixtures" and _"Chemical potentials from structure factors: II. Charged multi-component mixtures"
+Data repository for 
+- "Chemical potentials from structure factors: I. Neutral multi-component mixtures"  — [arXiv:2608.08357](https://arxiv.org/abs/2608.08357)
+- "Chemical potentials from structure factors: II. Charged multi-component mixtures"
 
 This repository computes composition-dependent chemical potentials of multicomponent liquids directly from NPT molecular dynamics simulations using the extended-S0 method.
 
@@ -21,7 +23,8 @@ For charged systems we follow the same general workflow. However, step 3 is modi
 
 - [`LiquidAlloyFeCuNi/`](LiquidAlloyFeCuNi/) — MD inputs, simulated S0 data, and stationary GP regression models for the Fe-Cu-Ni system.
 - [`Paracetamo-Water-Ethanol/`](Paracetamo-Water-Ethanol/) —  MD inputs, simulated S0 data, and non-stationary GP regression models for the paracetamol–water–ethanol system.
-- [`Molten_Salts/`](Molten_Salts/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis 
+- [`Molten_Salts/`](Molten_Salts/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis
+- [`HalideAqueousElectrolyte/`](HalideAqueousElectrolyte/) MD inputs, simulated S0 data, Bare Coulomb(BC) fits, and GP regression model
 
 
 ## 1.  Requirements
