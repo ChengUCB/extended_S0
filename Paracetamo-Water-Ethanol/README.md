@@ -72,11 +72,13 @@ column.
 ## Requirements
 
 Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
-(Python 3.10+, NumPy, pandas, PyTorch, `gpr_grad`, `szero`):
+(Python 3.10+, NumPy, PyTorch, `gpr_grad`, `szero`):
 
 | Item | Needs |
 |---|---|
-| both notebooks | shared requirements + `matplotlib`, `scipy` |
+| both notebooks | shared requirements + `pandas`, `matplotlib`, `scipy` |
+| `generate_md_inputs.py` | |
+| running the MD itself | LAMMPS |
 
 `gpr_grad` classes used here: `DirectionalGradientGP`, `InputWarpedKernelFunction`,
 `GibbsKernelFunction`.
