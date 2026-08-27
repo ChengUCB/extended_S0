@@ -33,7 +33,6 @@ Requirements for S0_multi and GPR_grad
 
 - Python 3.10+
 - NumPy
-- pandas
 - PyTorch
 
 The workflow relies on the following companion packages:
