@@ -68,3 +68,15 @@ analysis converts to — so the mol/L → mol/kg interpolation happens on the
 table's own grid. The conversion `c / ρ_solvent` neglects the volume the
 dissolved paracetamol occupies, matching the convention of the Assis mol/kg
 column.
+
+## Requirements
+
+Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
+(Python 3.10+, NumPy, pandas, PyTorch, `gpr_grad`, `szero`):
+
+| Item | Needs |
+|---|---|
+| both notebooks | shared requirements + `matplotlib`, `scipy` |
+
+`gpr_grad` classes used here: `DirectionalGradientGP`, `InputWarpedKernelFunction`,
+`GibbsKernelFunction`.
