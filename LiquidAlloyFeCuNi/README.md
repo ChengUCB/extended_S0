@@ -72,6 +72,13 @@ Gibbs free energy of mixing across the ternary.
 - `Fe-Cu-Ni-gp-clean.ipynb` — GP fit / integration to `Gmix`.
 
 ## Requirements
-- LAMMPS with the `eam/alloy` pair style (step 1).
-- Python with `numpy` and `numba` (steps 2–3).
-- The `gpr` conda environment from `../calcgp-master/env.yml` for the notebook (step 4).
+
+Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
+(Python 3.10+, NumPy, pandas, PyTorch, `gpr_grad`, `szero`):
+
+| Step | Needs |
+|---|---|
+| 1 — `MD/` | LAMMPS built with the **MANYBODY** package (`pair_style eam/alloy`) and **EXTRA-FIX** (`fix temp/csvr`).
+| 2 — `simple_sk_pipeline.py` | `numba` |
+| 4 — notebook | shared requirements + `matplotlib`, `mpltern` |
+
