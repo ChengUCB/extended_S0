@@ -1,0 +1,45 @@
+units		real
+dimension	3
+boundary	p p p
+atom_style	full
+
+
+neighbor        1.5    bin
+neigh_modify    delay 0 every 1 check yes
+
+
+read_data    initial.data 
+
+include interAll.pp
+
+min_style cg
+minimize 1.0e-4 1.0e-6 1000 10000
+replicate 2 2 2
+velocity        all create 300.0 432567 rot yes dist gaussian
+timestep 2
+thermo 100
+thermo_style custom step temp pe ke enthalpy lx ly lz atoms press pxx pyy pzz pxy pyz pxz
+
+fix             sh all shake 0.0001 20 0 b 1 a 1
+fix             mom all momentum 1000 linear 1 1 1
+fix              equal all npt temp 458.15 298.15 200.0 iso 1.0 1.0 2000.0
+run 100000
+unfix equal
+
+fix              thrm all npt temp 298.15 298.15 200.0 iso 1.0 1.0 2000.0
+run 200000
+
+write_data       data.equal
+write_restart    restart.equal
+
+
+dump myDump all custom 1000 dump.lammpstrj element x y z
+dump_modify myDump  element  H O F Cl Br I Li Na K Rb Cs sort id
+
+restart 100000 restart.*.bin
+run 2000000
+write_data       data.final
+unfix sh 
+unfix mom 
+unfix thrm
+
