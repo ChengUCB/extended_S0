@@ -4,10 +4,8 @@ Cleaned data and minimal analysis scripts for the aqueous-electrolyte examples.
 
 Assumptions:
 
-- Use the `asap` Python environment, or an equivalent scientific Python setup.
 - The GP and S0 helper repositories are already installed or on `PYTHONPATH`, so `gpr_grad` and `szero` can be imported.
 - Raw trajectory-derived `Sk` files are not included. The fitted S0 CSV outputs are included.
-- `simple_sk_pipeline.py` regenerates the `Sk` files from LAMMPS trajectories; it needs `numpy` and `numba`.
 
 ## Contents
 
@@ -84,3 +82,16 @@ python simple_sk_pipeline.py \
     --elements O H Na Cl --n-splits 3 --n-blocks 4 --k-bins 8 \
     --out-dir sk_output
 ```
+
+## Requirements
+
+Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
+(Python 3.10+, NumPy, PyTorch, `gpr_grad`, `szero`):
+
+| Item | Needs |
+|---|---|
+| `MD_Inputs/` | LAMMPS built with **KSPACE** (`kspace_style pppm`), **MOLECULE**, **RIGID** (`fix shake`) and **EXTRA-FIX** (`fix momentum`); `pair_style lj/cut/coul/long` |
+| `simple_sk_pipeline.py` | `numpy`, `numba` |
+| `*/scripts/extract_*.py` | `numpy`, `scipy`, `pandas` |
+| `mixed_halide_mu_ex/` | shared requirements + `pandas` |
+| `*/notebooks/test-gp.ipynb` | shared requirements + `pandas`, `matplotlib`, `mpltern`; `scipy` for NaClWater |
