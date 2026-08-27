@@ -79,7 +79,7 @@ Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
 | Step | Needs |
 |---|---|
 | 1 — `MD/` | LAMMPS built with the **MANYBODY** package (`pair_style eam/alloy`) and **EXTRA-FIX** (`fix temp/csvr`).
-| 2 — `simple_sk_pipeline.py` |  `numba` |
-| 3 — `extract_FeCuNi_matrix_s0_all_splits.py` | |
+| 2 — `simple_sk_pipeline.py` |  `numba` `numpy` |
+| 3 — `extract_FeCuNi_matrix_s0_all_splits.py` | `numpy` |
 | 4 — notebook | shared requirements + `pandas`, `matplotlib`, `mpltern` |
 
