@@ -29,15 +29,11 @@ For charged systems, we follow the same general workflow. However, step 3 is mod
 
 ## 1.  Requirements
 
-Running the example workflows requires the following Python packages:
+Requirements for S0_multi and GPR_grad
 
 - Python 3.10+
 - NumPy
-- SciPy
 - pandas
-- matplotlib
-- scikit-learn
-- mpltern
 - PyTorch
 
 The workflow relies on the following companion packages:
