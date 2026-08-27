@@ -29,7 +29,7 @@ For charged systems, we follow the same general workflow. However, step 3 is mod
 
 ## 1.  Requirements
 
-Requirements for S0_multi and GPR_grad
+Requirements for S0_multi and GPR_grad. Additional requirements listed for each example.
 
 - Python 3.10+
 - NumPy
