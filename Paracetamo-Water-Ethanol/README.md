@@ -77,7 +77,7 @@ Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
 | Item | Needs |
 |---|---|
 | both notebooks | shared requirements + `pandas`, `matplotlib`, `scipy` |
-| `generate_md_inputs.py` | |
+| `generate_md_inputs.py` | `numpy`|
 | running the MD itself | LAMMPS |
 
 `gpr_grad` classes used here: `DirectionalGradientGP`, `InputWarpedKernelFunction`,
