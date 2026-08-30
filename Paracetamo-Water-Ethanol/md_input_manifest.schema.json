@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChengUCB/extended_S0/Paracetamo-Water-Ethanol/md_input_manifest.schema.json",
+  "title": "Paracetamol-water-ethanol MD input composition manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "level_composition"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "level_composition": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "n_para",
+          "n_water",
+          "n_ethanol",
+          "box_edge_angstrom",
+          "seed"
+        ],
+        "properties": {
+          "n_para": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "n_water": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "n_ethanol": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "box_edge_angstrom": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "seed": {
+            "type": "integer"
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "n_water": {
+                "minimum": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "n_ethanol": {
+                "minimum": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

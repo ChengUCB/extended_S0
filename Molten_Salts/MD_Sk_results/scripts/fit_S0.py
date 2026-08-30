@@ -73,8 +73,13 @@ To run:
     python3 fit_S0.py --kcut 0.01
 
 Writes two files per run:
-  S0_kcut<value>.csv           one row per composition / block / version
-  S0_kcut<value>_summary.csv   one row per composition, averaged over blocks
+  S0_k2cut<value>.csv           one row per composition / block / version
+  S0_k2cut<value>_summary.csv   one row per composition, averaged over blocks
+
+The detailed table includes ``system``, ``solute_cation``, and ``method`` so
+it can be passed directly to either ``compute_gmix_*.py`` script with
+``--input``.  Those workflows select the recommended ``BC fixed kappa_D``
+rows explicitly.
 """
 
 from __future__ import annotations
@@ -125,6 +130,11 @@ def formula_label() -> str:
     """
     q = int(round(abs(CHARGES[0]) / abs(CHARGES[1])))
     return SPECIES[0] + SPECIES[1] + ("" if q == 1 else str(q))
+
+
+def system_label() -> str:
+    """Canonical downstream label, e.g. MgCl2-NaCl or LiCl-NaCl."""
+    return f"{formula_label()}-{SPECIES[2]}{SPECIES[1]}"
 
 
 def set_species(names, charges) -> None:
@@ -465,6 +475,8 @@ def run(kcut: float) -> list[dict]:
 
                 s0 = out["s0"]
                 rows.append({
+                    "system": system_label(),
+                    "solute_cation": SPECIES[0],
                     "tag": tag,
                     f"x_{formula_label()}": n_mg / (n_mg + n_na),
                     "split": split,
@@ -531,6 +543,8 @@ def summarise(rows: list[dict]) -> list[dict]:
             whole = next(r for r in sel if r["split"] == 0)
             blocks = [r for r in sel if r["split"] != 0]
             row = {
+                "system": whole["system"],
+                "solute_cation": whole["solute_cation"],
                 "tag": tag,
                 f"x_{formula_label()}": whole[f"x_{formula_label()}"],
                 "method": label,
@@ -550,10 +564,31 @@ def summarise(rows: list[dict]) -> list[dict]:
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
-    with path.open("w", newline="") as fh:
+    with path.open("x", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
+
+
+def require_new_output_bundle(paths: tuple[Path, ...]) -> None:
+    existing = [path for path in paths if path.exists() or path.is_symlink()]
+    if existing:
+        names = ", ".join(path.name for path in existing)
+        raise FileExistsError(
+            f"Refusing to overwrite existing S(0) output(s): {names}. "
+            "Use a new --out-dir or --label and preserve the old bundle."
+        )
+
+
+def write_output_bundle(
+    detail: Path,
+    summary: Path,
+    detail_rows: list[dict],
+    summary_rows: list[dict],
+) -> None:
+    require_new_output_bundle((detail, summary))
+    write_csv(detail, detail_rows)
+    write_csv(summary, summary_rows)
 
 
 def main() -> None:
@@ -585,12 +620,13 @@ def main() -> None:
 
     out_dir = (args.out_dir.expanduser().resolve() if args.out_dir else HERE)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = run(args.kcut)
     tag = f"{args.kcut:g}" + (f"_{args.label}" if args.label else "")
-    detail = out_dir / f"S0_kcut{tag}.csv"
-    summary = out_dir / f"S0_kcut{tag}_summary.csv"
-    write_csv(detail, rows)
-    write_csv(summary, summarise(rows))
+    detail = out_dir / f"S0_k2cut{tag}.csv"
+    summary = out_dir / f"S0_k2cut{tag}_summary.csv"
+    require_new_output_bundle((detail, summary))
+    rows = run(args.kcut)
+    summary_rows = summarise(rows)
+    write_output_bundle(detail, summary, rows, summary_rows)
 
     bad = [r for r in rows if not r["fit_converged"]]
     print(f"\nwrote {detail}   ({len(rows)} rows)")

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "level_composition": {
+    "schema_example": {
+      "n_para": 1,
+      "n_water": 1,
+      "n_ethanol": 0,
+      "box_edge_angstrom": 40.0,
+      "seed": 20260829
+    }
+  }
+}
