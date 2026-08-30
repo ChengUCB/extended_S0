@@ -27,11 +27,13 @@ Trajectory -> S(k) processing script. Reads LAMMPS dump files, splits each
 trajectory into `--n-splits` segments with block averaging, and writes the
 partial structure factors `S_ab(k)`
 
-Physical `k^2` follows each frame's orthorhombic box. Triclinic LAMMPS dumps
-are rejected because this compact reader does not implement a full reciprocal
-cell matrix. Existing whole/split outputs for a label are also rejected rather
-than overwritten or mixed with a different block count; choose a new
-`--out-dir` or move the previous result set.
+Physical `k^2` follows each frame's full reciprocal cell. The reader supports
+orthorhombic boxes, restricted triclinic `BOX BOUNDS xy xz yz`, and general
+triclinic `BOX BOUNDS abc origin` dumps. Atom records must contain unscaled
+Cartesian `x y z` coordinates plus `type` or `element`; scaled `xs ys zs` and
+unwrapped `xu yu zu` columns are not accepted. Existing whole/split outputs for
+a label are also rejected rather than overwritten or mixed with a different
+block count; choose a new `--out-dir` or move the previous result set.
 
 ### `NaClWater/`
 

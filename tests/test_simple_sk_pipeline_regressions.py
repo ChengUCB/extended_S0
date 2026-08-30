@@ -71,21 +71,112 @@ class SimpleSkPipelineRegressionTests(unittest.TestCase):
                 data = np.loadtxt(out_dir / "case-allSk.dat")
                 self.assertAlmostEqual(data[1, 0], expected_k_sq, places=9)
 
-    def test_triclinic_lammps_box_is_rejected(self):
+    def test_variable_triclinic_cell_uses_full_reciprocal_matrix(self):
+        cells = [
+            np.array([[10.0, 0.0, 0.0], [2.0, 10.0, 0.0], [0.0, 0.0, 10.0]]),
+            np.array([[20.0, 0.0, 0.0], [-4.0, 20.0, 0.0], [0.0, 0.0, 20.0]]),
+        ]
+        frames = [
+            (cell, np.array(["X"]), np.array([[0.25, 0.0, 0.0]]))
+            for cell in cells
+        ]
+        indices = np.array(
+            [[i, j, k] for i in range(2) for j in range(2) for k in range(2)],
+            dtype=float,
+        )
+        expected_k_sq = np.mean(
+            [
+                np.sum((indices @ np.linalg.inv(cell).T) ** 2, axis=1)
+                for cell in cells
+            ],
+            axis=0,
+        )
+
+        for path, module in self.pipelines:
+            with self.subTest(pipeline=path), tempfile.TemporaryDirectory() as tmp:
+                out_dir = Path(tmp)
+                self._run_pipeline(
+                    module, frames, out_dir, n_splits=1, n_blocks=2
+                )
+                data = np.loadtxt(out_dir / "case-allSk.dat")
+                np.testing.assert_allclose(data[:, 0], expected_k_sq, rtol=1e-6)
+                self.assertAlmostEqual(data[4, 0], 0.0065, places=9)
+
+    def test_restricted_triclinic_box_restores_cell_origin_and_fractional_coords(self):
         trajectory = """ITEM: TIMESTEP
 0
 ITEM: NUMBER OF ATOMS
 1
 ITEM: BOX BOUNDS xy xz yz pp pp pp
-0 10 1
-0 10 0
-0 10 0
+-3.5 6.75 -1.5
+2.5 9 0.75
+1 6 -0.5
 ITEM: ATOMS id type x y z
-1 1 1 1 1
+1 1 -0.1875 5.625 4.75
+"""
+        for path, module in self.pipelines:
+            with self.subTest(pipeline=path):
+                cell, elements, fractional = module._read_lammpstrj_frame(
+                    io.StringIO(trajectory), {"1": "X"}
+                )
+                np.testing.assert_allclose(
+                    cell,
+                    [[8.0, 0.0, 0.0], [-1.5, 6.0, 0.0], [0.75, -0.5, 5.0]],
+                )
+                np.testing.assert_array_equal(elements, ["X"])
+                np.testing.assert_allclose(fractional, [[0.25, 0.5, 0.75]])
+
+    def test_general_triclinic_box_reads_edge_vectors_and_origin(self):
+        trajectory = """ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+1
+ITEM: BOX BOUNDS abc origin
+2 0.5 0.1 -1
+-0.2 3 0.4 2
+0.3 -0.1 4 3
+ITEM: ATOMS id type x y z
+1 1 -0.375 3.55 6.225
+"""
+        expected_cell = np.array(
+            [[2.0, 0.5, 0.1], [-0.2, 3.0, 0.4], [0.3, -0.1, 4.0]]
+        )
+        for path, module in self.pipelines:
+            with self.subTest(pipeline=path):
+                cell, elements, fractional = module._read_lammpstrj_frame(
+                    io.StringIO(trajectory), {"1": "X"}
+                )
+                np.testing.assert_allclose(cell, expected_cell)
+                np.testing.assert_array_equal(elements, ["X"])
+                np.testing.assert_allclose(fractional, [[0.25, 0.5, 0.75]])
+
+    def test_triclinic_kgrid_uses_inverse_transpose(self):
+        cell = np.array([[2.0, 0.0, 0.0], [1.0, 2.0, 0.0], [0.0, 0.0, 4.0]])
+        for path, module in self.pipelines:
+            with self.subTest(pipeline=path):
+                kgrid_real, kgrid_2pi, k_sq = module.make_kgrid(cell, 2)
+                indices = kgrid_2pi / (2.0 * np.pi)
+                expected_grid = indices @ np.linalg.inv(cell).T
+                np.testing.assert_allclose(kgrid_real, expected_grid)
+                np.testing.assert_allclose(k_sq, np.sum(expected_grid**2, axis=1))
+                np.testing.assert_allclose(kgrid_real[4], [0.5, -0.25, 0.0])
+                self.assertAlmostEqual(k_sq[4], 0.3125)
+
+    def test_singular_general_triclinic_box_is_rejected(self):
+        trajectory = """ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+1
+ITEM: BOX BOUNDS abc origin
+1 0 0 0
+0 1 0 0
+1 1 0 0
+ITEM: ATOMS id type x y z
+1 1 0 0 0
 """
         for path, module in self.pipelines:
             with self.subTest(pipeline=path), self.assertRaisesRegex(
-                ValueError, "Triclinic"
+                ValueError, "nonsingular and right-handed"
             ):
                 module._read_lammpstrj_frame(io.StringIO(trajectory), {"1": "X"})
 

@@ -9,6 +9,93 @@ from pathlib import Path
 import numpy as np
 from numba import njit, prange
 
+
+def _as_cell_matrix(cell):
+    """Return box edge vectors A, B, C as the rows of a valid 3x3 matrix."""
+    matrix = np.asarray(cell, dtype=float)
+    if matrix.shape == (3,):
+        matrix = np.diag(matrix)
+    if matrix.shape != (3, 3):
+        raise ValueError("LAMMPS box cell must have shape (3,) or (3, 3)")
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("LAMMPS box cell must contain only finite values")
+    determinant = float(np.linalg.det(matrix))
+    if not np.isfinite(determinant) or determinant <= 0.0:
+        raise ValueError("LAMMPS box cell must be nonsingular and right-handed")
+    return matrix
+
+
+def _physical_kgrid(indices, cell):
+    """Map integer reciprocal indices to Cartesian vectors without 2π."""
+    return np.asarray(indices, dtype=float) @ np.linalg.inv(
+        _as_cell_matrix(cell)
+    ).T
+
+
+def _read_lammps_box(f, box_header):
+    """Read orthorhombic, restricted-triclinic, or general-triclinic bounds."""
+    if box_header[:3] != ["ITEM:", "BOX", "BOUNDS"]:
+        raise ValueError(f"Expected 'ITEM: BOX BOUNDS', got: {' '.join(box_header)!r}")
+
+    descriptors = box_header[3:]
+    is_restricted = descriptors[:3] == ["xy", "xz", "yz"]
+    is_general = descriptors[:2] == ["abc", "origin"]
+    if not (is_restricted or is_general) and any(
+        token in {"xy", "xz", "yz", "abc", "origin"}
+        for token in descriptors
+    ):
+        raise ValueError(
+            f"Malformed triclinic BOX BOUNDS header: {' '.join(box_header)!r}"
+        )
+
+    values_per_line = 4 if is_general else 3 if is_restricted else 2
+    rows = []
+    for _ in range(3):
+        fields = f.readline().split()
+        if len(fields) != values_per_line:
+            box_kind = (
+                "general triclinic"
+                if is_general
+                else "restricted triclinic"
+                if is_restricted
+                else "orthorhombic"
+            )
+            raise ValueError(
+                f"Expected {values_per_line} BOX BOUNDS values per line for "
+                f"a {box_kind} box"
+            )
+        rows.append([float(value) for value in fields])
+    rows = np.asarray(rows, dtype=float)
+
+    if is_general:
+        cell = rows[:, :3]
+        origin = rows[:, 3]
+    elif is_restricted:
+        xlo_bound, xhi_bound, xy = rows[0]
+        ylo_bound, yhi_bound, xz = rows[1]
+        zlo, zhi, yz = rows[2]
+        xlo = xlo_bound - min(0.0, xy, xz, xy + xz)
+        xhi = xhi_bound - max(0.0, xy, xz, xy + xz)
+        ylo = ylo_bound - min(0.0, yz)
+        yhi = yhi_bound - max(0.0, yz)
+        origin = np.array([xlo, ylo, zlo])
+        cell = np.array(
+            [
+                [xhi - xlo, 0.0, 0.0],
+                [xy, yhi - ylo, 0.0],
+                [xz, yz, zhi - zlo],
+            ]
+        )
+    else:
+        origin = rows[:, 0]
+        cell = rows[:, 1] - rows[:, 0]
+
+    if not np.all(np.isfinite(origin)):
+        raise ValueError("LAMMPS box origin must contain only finite values")
+    _as_cell_matrix(cell)
+    return cell, origin
+
+
 def _parse_atoms_header(line):
 
     cols = line.strip().split()[2:]     # drop 'ITEM:' and 'ATOMS'
@@ -48,24 +135,8 @@ def _read_lammpstrj_frame(f, type_to_elem):
         f.readline()                       # timestep value + "ITEM: NUMBER OF ATOMS"
     natoms = int(f.readline())
     box_header = f.readline().split()      # ITEM: BOX BOUNDS ...
-    if any(token in {"xy", "xz", "yz", "abc"} for token in box_header[3:]):
-        raise ValueError(
-            "Triclinic LAMMPS boxes are not supported by this pipeline; "
-            "convert to an orthorhombic trajectory or implement the full "
-            "cell-matrix reciprocal grid."
-        )
-    cell = np.zeros(3)
-    origin = np.zeros(3)
-    for i in range(3):
-        bounds = f.readline().split()
-        if len(bounds) != 2:
-            raise ValueError(
-                "Expected two orthorhombic BOX BOUNDS values per axis; "
-                "triclinic tilt factors are not supported."
-            )
-        lo, hi = map(float, bounds)
-        origin[i] = lo
-        cell[i] = hi - lo
+    cell, origin = _read_lammps_box(f, box_header)
+    cart_to_frac = np.linalg.inv(_as_cell_matrix(cell))
     ic, id_kind, xc, yc, zc = _parse_atoms_header(f.readline())
     elems = np.empty(natoms, dtype="U8")
     frac = np.zeros((natoms, 3))
@@ -78,11 +149,7 @@ def _read_lammpstrj_frame(f, type_to_elem):
         else:
             elems[i] = type_to_elem.get(parts[ic], parts[ic])  # numeric → symbol
         x, y, z = float(parts[xc]), float(parts[yc]), float(parts[zc])
-        frac[i] = (
-            (x - origin[0]) / cell[0],
-            (y - origin[1]) / cell[1],
-            (z - origin[2]) / cell[2],
-        )
+        frac[i] = (np.array([x, y, z]) - origin) @ cart_to_frac
     return cell, elems, frac
 
 
@@ -105,7 +172,7 @@ def read_frames(path, type_to_elem=None):
 
 def make_kgrid(cell, bins):
     """
-    Build the k-grid for an orthorhombic cell.
+    Build the k-grid for an orthorhombic or triclinic cell.
 
     Returns
     -------
@@ -123,7 +190,7 @@ def make_kgrid(cell, bins):
          for k in range(bins)],
         dtype=float,
     )
-    kgrid_real = idx * (1.0 / cell)[None, :]
+    kgrid_real = _physical_kgrid(idx, cell)
     kgrid_2pi = idx * (2.0 * math.pi)
     k_sq = np.sum(kgrid_real**2, axis=1)
     return kgrid_real, kgrid_2pi, k_sq
@@ -402,9 +469,8 @@ def process_trajectory(
         else:
             # Integer reciprocal indices define the Fourier phases, while
             # their physical |k|^2 changes with the NPT/NPH cell each frame.
-            frame_k_sq = np.sum(
-                (kgrid_indices / np.asarray(cell)[None, :]) ** 2, axis=1
-            )
+            frame_kgrid_real = _physical_kgrid(kgrid_indices, cell)
+            frame_k_sq = np.sum(frame_kgrid_real**2, axis=1)
         sk = sk_one_frame(frac, elems, kgrid_2pi, elements)
 
         split_idx = int(np.searchsorted(split_ends, frame_idx, side="right"))
