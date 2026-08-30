@@ -1,5 +1,9 @@
-# Analysis/notebook environment. The exact smoke-test subset is pinned above.
--r requirements-smoke.txt
+# Python packages used by the analysis scripts, notebooks, and local regression tests.
+numpy==1.26.2
+pandas==2.1.4
+scipy==1.11.4
+matplotlib==3.8.2
+numba==0.58.1
 
 # PyTorch wheels are platform-specific; keep the supported major range explicit.
 torch>=2.1,<3

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import csv
 import contextlib
 import hashlib
@@ -9,10 +10,10 @@ import json
 import os
 import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
-from unittest import mock
+
+import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +35,6 @@ NACL_COMMON = load_module(
 )
 PARA_INPUTS = load_module("_test_para_inputs", PARA_DIR / "generate_md_inputs.py")
 PARA_DATA = load_module("_test_para_data", PARA_DIR / "diagnose_mu_ex_gp_para.py")
-PARA_DIRECTIONS = load_module("_test_para_directions", PARA_DIR / "directional_gpr.py")
 
 
 class NaClWaterSplitTests(unittest.TestCase):
@@ -140,8 +140,8 @@ class NotebookPathTests(unittest.TestCase):
         self.assertIn("BC", first["method"])
 
 
-class ParacetamolHelperTests(unittest.TestCase):
-    def test_production_notebook_has_no_unverified_embedded_outputs(self):
+class ParacetamolNotebookTests(unittest.TestCase):
+    def test_analysis_notebook_has_no_unverified_embedded_outputs(self):
         notebook = json.loads(
             (PARA_DIR / "Para-water-eth_Final.ipynb").read_text(encoding="utf-8")
         )
@@ -150,22 +150,77 @@ class ParacetamolHelperTests(unittest.TestCase):
                 self.assertIsNone(cell.get("execution_count"))
                 self.assertEqual(cell.get("outputs", []), [])
 
+    def test_analysis_notebook_uses_companion_packages_directly(self):
+        notebook = json.loads(
+            (PARA_DIR / "Para-water-eth_Final.ipynb").read_text(encoding="utf-8")
+        )
+        source = "\n".join(
+            "".join(cell.get("source", [])) for cell in notebook["cells"]
+        )
+        self.assertIn("from szero import prepare_gp_gradient_data", source)
+        self.assertIn("from gpr_grad import DirectionalGradientGP", source)
+
     def test_bundled_s0_contract_and_direction_count(self):
         frame = PARA_DATA.load_s0()
-
-        fake_szero = types.ModuleType("szero")
-
-        def fake_prepare(subset, *, independent_components, **_kwargs):
-            count = len(subset) * len(independent_components)
-            return None, list(range(count)), None
-
-        fake_szero.prepare_gp_gradient_data = fake_prepare
-        with mock.patch.dict(sys.modules, {"szero": fake_szero}):
-            points, gradients, directions = PARA_DIRECTIONS.prepare_para_directional_data(
-                frame, PARA_DATA.COLUMN_MAP, PARA_DATA.KBT
-            )
-
         self.assertEqual(len(frame), 262)
+        ternary = (frame.x_water > 1e-9) & (frame.x_ethanol > 1e-9)
+        water_edge = frame.x_ethanol <= 1e-9
+        ethanol_edge = frame.x_water <= 1e-9
+        self.assertEqual(
+            2 * int(ternary.sum()) + int(water_edge.sum()) + int(ethanol_edge.sum()),
+            490,
+        )
+
+    @unittest.skipUnless(
+        os.environ.get("SZERO_DIR") and os.environ.get("GPR_GRAD_DIR"),
+        "set SZERO_DIR and GPR_GRAD_DIR for companion API checks",
+    )
+    def test_updated_companion_apis_are_available(self):
+        szero_root = Path(os.environ["SZERO_DIR"])
+        gpr_root = Path(os.environ["GPR_GRAD_DIR"])
+        self.assertTrue((szero_root / "szero").is_dir())
+        self.assertTrue((gpr_root / "gpr_grad").is_dir())
+        sys.path[:0] = [str(szero_root), str(gpr_root)]
+        try:
+            from gpr_grad import DirectionalGradientGP
+            from szero import prepare_gp_gradient_data
+
+            notebook = json.loads(
+                (PARA_DIR / "Para-water-eth_Final.ipynb").read_text(encoding="utf-8")
+            )
+            source = next(
+                "".join(cell["source"])
+                for cell in notebook["cells"]
+                if cell.get("id") == "48637535"
+            )
+            function = next(
+                node
+                for node in ast.parse(source).body
+                if isinstance(node, ast.FunctionDef)
+                and node.name == "_gradient_observations"
+            )
+            namespace = {
+                "np": np,
+                "COLUMN_MAP": PARA_DATA.COLUMN_MAP,
+                "KBT": PARA_DATA.KBT,
+                "prepare_gp_gradient_data": prepare_gp_gradient_data,
+            }
+            exec(
+                compile(
+                    ast.Module(body=[function], type_ignores=[]),
+                    "Para-water-eth_Final.ipynb",
+                    "exec",
+                ),
+                namespace,
+            )
+            points, gradients, directions = namespace["_gradient_observations"](
+                PARA_DATA.load_s0()
+            )
+        finally:
+            sys.path.remove(str(szero_root))
+            sys.path.remove(str(gpr_root))
+        self.assertTrue(callable(prepare_gp_gradient_data))
+        self.assertTrue(hasattr(DirectionalGradientGP, "fit"))
         self.assertEqual(points.shape, (490, 2))
         self.assertEqual(gradients.shape, (490,))
         self.assertEqual(directions.shape, (490, 2))
@@ -174,31 +229,16 @@ class ParacetamolHelperTests(unittest.TestCase):
             {(1.0, 0.0), (0.0, 1.0), (1.0, -1.0)},
         )
 
-    @unittest.skipUnless(os.environ.get("SZERO_DIR"), "set SZERO_DIR for companion integration test")
-    def test_real_szero_directional_contract(self):
-        package_root = Path(os.environ["SZERO_DIR"])
-        self.assertTrue((package_root / "szero").is_dir())
-        sys.path.insert(0, str(package_root))
-        try:
-            points, gradients, directions = PARA_DIRECTIONS.prepare_para_directional_data(
-                PARA_DATA.load_s0(), PARA_DATA.COLUMN_MAP, PARA_DATA.KBT
-            )
-        finally:
-            sys.path.remove(str(package_root))
-        self.assertEqual(points.shape, (490, 2))
-        self.assertEqual(gradients.shape, (490,))
-        self.assertEqual(directions.shape, (490, 2))
-
 
 class MdInputManifestTests(unittest.TestCase):
     def test_empty_inline_configuration_fails(self):
         with self.assertRaisesRegex(ValueError, "--manifest"):
             PARA_INPUTS.build_levels({})
 
-    def test_sample_manifest_loads_and_is_marked_nonproduction(self):
+    def test_sample_manifest_is_a_single_schema_example(self):
         sample = PARA_DIR / "md_input_manifest.sample.json"
         levels, source = PARA_INPUTS.load_composition_manifest(sample)
-        self.assertEqual(set(levels), {"smoke_test_not_production"})
+        self.assertEqual(set(levels), {"schema_example"})
         self.assertEqual(source["sha256"], hashlib.sha256(sample.read_bytes()).hexdigest())
 
     def test_sample_manifest_builds_and_reuses_identical_input(self):
@@ -209,7 +249,7 @@ class MdInputManifestTests(unittest.TestCase):
             PARA_INPUTS.build_levels(
                 levels, output_root=temporary, quiet=True, composition_manifest=source
             )
-            case_dir = Path(temporary) / "smoke_test_not_production"
+            case_dir = Path(temporary) / "schema_example"
             original = (case_dir / "input-config.dat").read_bytes()
             first_info = json.loads((case_dir / "case_info.json").read_text(encoding="utf-8"))
 
@@ -266,7 +306,7 @@ class MdInputManifestTests(unittest.TestCase):
             manifest_path = Path(temporary) / "manifest.json"
             original_manifest = manifest_path.read_bytes()
             original_input = (
-                Path(temporary) / "smoke_test_not_production" / "input-config.dat"
+                Path(temporary) / "schema_example" / "input-config.dat"
             ).read_bytes()
 
             changed_source = {**source, "sha256": "different-manifest"}
@@ -280,7 +320,7 @@ class MdInputManifestTests(unittest.TestCase):
 
             self.assertEqual(manifest_path.read_bytes(), original_manifest)
             self.assertEqual(
-                (Path(temporary) / "smoke_test_not_production" / "input-config.dat").read_bytes(),
+                (Path(temporary) / "schema_example" / "input-config.dat").read_bytes(),
                 original_input,
             )
 

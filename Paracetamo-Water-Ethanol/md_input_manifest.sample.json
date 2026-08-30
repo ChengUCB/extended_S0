@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "level_composition": {
-    "smoke_test_not_production": {
+    "schema_example": {
       "n_para": 1,
       "n_water": 1,
       "n_ethanol": 0,

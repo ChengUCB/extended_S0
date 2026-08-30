@@ -65,5 +65,5 @@ output directory.
 Resume starts a new dynamics segment at the final saved atomic configuration;
 it does not restore the Nose-Hoover-chain or barostat internal state and is not
 a bitwise or exact dynamical checkpoint. Re-equilibrate after each restart and
-exclude that interval from production analysis unless a future implementation
-serializes and restores the complete integrator state.
+exclude that interval before calculating equilibrium averages unless a future
+implementation serializes and restores the complete integrator state.

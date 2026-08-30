@@ -61,7 +61,8 @@ factor.
 The root `requirements.txt` is the analysis/notebook environment; it does not
 claim to reproduce the original MD runtime. Running the NPT scripts separately
 requires ASE, PyTorch, and MACE with the APIs used by the scripts. The exact
-production versions were not preserved, so install them in an isolated
-environment, verify the checkpoint on a small system, and record `pip freeze`
-with the run metadata. The Gmix scripts additionally import the public
+versions used to generate the reported trajectories were not preserved, so
+install them in an isolated environment, verify the checkpoint on a small
+system, and record `pip freeze` with the run metadata. The Gmix scripts import
+the public
 companion packages `ChengUCB/GPR_grad` and `ChengUCB/S0_multi`.

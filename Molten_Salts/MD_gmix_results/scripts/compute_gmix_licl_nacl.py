@@ -479,8 +479,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--fit-method", choices=FIT_METHODS, default=None,
-        help="S(0) fit variant. Default: fitted for the tracked no --input "
-             "production table; fixed for an explicit canonical --input.",
+        help="S(0) fit variant. Default: fitted for the bundled table when "
+             "--input is omitted; fixed for an explicit canonical --input.",
     )
     args = parser.parse_args()
     SOURCE = args.source

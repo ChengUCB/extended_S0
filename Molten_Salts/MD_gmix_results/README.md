@@ -1,9 +1,8 @@
 # Mixing thermodynamics
 
 This directory contains the mixing-enthalpy, S(0)-to-mixing-free-energy, and
-two-panel plotting workflow for LiCl-NaCl and MgCl2-NaCl at 1200 K. All results
-are labeled **MACELES**, and the production analysis uses only
-`k^2_cut = 0.02 cycles^2 A^-2`.
+two-panel plotting workflow for LiCl-NaCl and MgCl2-NaCl at 1200 K. All bundled
+results are labeled **MACELES** and use `k^2_cut = 0.02 cycles^2 A^-2`.
 
 Both system scripts read the single combined
 `../MD_Sk_results/S0_k2cut0.02.csv` table and select their own `system` rows.
@@ -33,7 +32,7 @@ whether that method came from `--fit-method`, the canonical `--input` default,
 or the no-`--input` default.
 External and newly generated input tables must contain `method`; unlabeled
 tables are rejected. The sole exception is a byte-identical copy of the bundled
-production CSV whose content matches its tracked checksum sidecar, so no fit
+S(0) CSV whose content matches its tracked checksum sidecar, so no fit
 identity is inferred from an arbitrary legacy table or from its file path.
 When such a copy is passed explicitly with `--input`, also select
 `--fit-method "BC fitted kappa_D"`; explicit canonical inputs otherwise default

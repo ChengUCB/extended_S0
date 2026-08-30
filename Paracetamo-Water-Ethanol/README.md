@@ -22,7 +22,7 @@ experimental points in Figure B(b).
 | `composition_key` | `P{n_para:05d}_W{n_water:05d}_E{n_ethanol:05d}`, unique per row |
 | `n_para`, `n_water`, `n_ethanol` | molecule counts in the simulation cell |
 | `x_para`, `x_water`, `x_ethanol` | mole fractions, summing to 1 |
-| `S0_{NN,OO,CC,NO,NC,OC}` | the six partial `S(0)`, production value |
+| `S0_{NN,OO,CC,NO,NC,OC}` | the six partial `S(0)` from the full trajectory |
 | `S0_*_split{1,2,3}` | the same six from each of three independent trajectory blocks |
 
 Site labels: **N** = paracetamol (its nitrogen), **O** = water (its oxygen),
@@ -83,9 +83,9 @@ Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
 `gpr_grad` classes used here: `DirectionalGradientGP`, `InputWarpedKernelFunction`,
 `GibbsKernelFunction`.
 
-The production notebook's local helper modules are included in this directory.
-For companion checkout variables and the validated notebook entry, see the
-[top-level reproducibility guide](../REPRODUCIBILITY.md).
+`Para-water-eth_Final.ipynb` calls `szero.prepare_gp_gradient_data` and
+`gpr_grad.DirectionalGradientGP` directly. For companion checkout variables,
+see the [top-level recalculation guide](../REPRODUCIBILITY.md).
 
 MD input generation is manifest-driven:
 
@@ -95,5 +95,5 @@ python generate_md_inputs.py --manifest /path/to/composition-manifest.json \
 ```
 
 The schema is `md_input_manifest.schema.json`. The bundled
-`md_input_manifest.sample.json` is deliberately labeled as a non-production
-smoke case and must not be used as scientific composition data.
+`md_input_manifest.sample.json` only demonstrates the manifest schema. Its
+molecule counts are illustrative and were not used for the reported results.

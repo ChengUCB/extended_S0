@@ -1,10 +1,11 @@
 # S(k) and S(0) results
 
-Only the production cutoff `k^2_cut = 0.02 cycles^2 A^-2` is retained.
+The bundled S(k) and S(0) tables use
+`k^2_cut = 0.02 cycles^2 A^-2`.
 
 - `Sk_k2cut0.02.csv`: every retained partial S(k) value for both systems in one
   table; all rows satisfy `0 < k^2 <= 0.02`.
-- `S0_k2cut0.02.csv`: all whole-window and four-block production S(0) fits for
+- `S0_k2cut0.02.csv`: complete-window and four-block S(0) fits for
   both systems in one table. The original CSV bytes are unchanged; the
   checksum-pinned `S0_k2cut0.02.provenance.json` contract identifies its rows
   as `method = BC fitted kappa_D`.
@@ -29,7 +30,8 @@ New `fit_S0.py` detailed outputs use the same `S0_k2cut<value>.csv` naming and
 include explicit `system`, `solute_cation`, and `method` fields for both
 `BC fixed kappa_D` and `BC fitted kappa_D`. With an explicit canonical
 `--input`, the Gmix workflows default to the recommended fixed fit. Without
-`--input`, they replay the tracked production table with its fitted label.
+`--input`, they read the bundled S(0) table and use the fitted-`kappa_D` method
+recorded in its checksum sidecar.
 `--fit-method` overrides either default. External and newly generated tables
 without `method` are rejected; only byte-identical copies of the bundled CSV
 whose SHA-256 matches the tracked sidecar receive a label from that contract.

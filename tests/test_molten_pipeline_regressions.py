@@ -439,7 +439,7 @@ class FitToGmixContractTests(unittest.TestCase):
                     loader.FITTED_FIT_METHOD,
                 )
 
-    def test_tracked_production_table_is_explicitly_fitted_and_readable(self):
+    def test_bundled_fitted_table_is_explicitly_labeled_and_readable(self):
         tracked = pd.read_csv(self.TRACKED_S0)
         self.assertEqual(len(tracked), 190)
         self.assertNotIn("method", tracked.columns)

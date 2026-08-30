@@ -40,7 +40,7 @@ REQUIRED_COLUMNS = {
 
 
 def load_s0(path: str | Path | None = None):
-    """Load the bundled S(0) table and validate the production notebook contract."""
+    """Load the bundled S(0) table and validate the analysis input schema."""
     import pandas as pd
 
     csv_path = DATA_FILE if path is None else Path(path)

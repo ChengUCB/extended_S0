@@ -35,13 +35,14 @@ Requirements for S0_multi and GPR_grad. Additional requirements listed for each 
 - NumPy
 - PyTorch
 
-The workflow relies on the following companion packages:
+The notebooks and analysis scripts import the current source versions of these
+companion packages directly:
+
 | Package | Role | Source |
 | --- | --- | --- |
-| **S0_multi** (`szero`) | Converts fitted `S0` values into the `Γ` matrix of chemical-potential derivatives. |[GitHub](https://github.com/ChengUCB/S0_multi)|
-| **GPR_grad** (`gpr_grad`) | PyTorch Gaussian-process regression with function-value **and gradient** observations; includes CUR point selection. |[GitHub](https://github.com/ChengUCB/GPR_grad) |
+| **S0_multi** (`szero`) | Converts fitted `S0` values into the `Γ` matrix of chemical-potential derivatives. | [GitHub](https://github.com/ChengUCB/S0_multi) |
+| **GPR_grad** (`gpr_grad`) | PyTorch Gaussian-process regression with function-value **and gradient** observations; includes CUR point selection. | [GitHub](https://github.com/ChengUCB/GPR_grad) |
 
-For the executable environment, companion-package variables, smoke tests, and
-external-data/checksum contract, see [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).
-
+For environment setup, companion-package paths, local tests, and external
+inputs needed for recalculation, see [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md).
 

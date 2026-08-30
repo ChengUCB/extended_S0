@@ -17,7 +17,7 @@ initial_configurations/
 ```
 
 `scripts/npt_md.py` is a reusable, restart-safe MACELES workflow with defaults
-matching the production setup: 1200 K, 1 bar, 2 fs, 25,000 NVT steps, and
+matching the reported simulations: 1200 K, 1 bar, 2 fs, 25,000 NVT steps, and
 1,000,000 isotropic MTK-NPT steps. Supply an extracted configuration and the
 tracked MACELES model checkpoint:
 
@@ -37,9 +37,10 @@ checkpoint uses Python/PyTorch serialization and must therefore be treated as
 trusted code: the hash checks identity, not authenticity or safety.
 
 The root requirements file covers analysis, not this MD runtime. Install a
-compatible ASE/PyTorch/MACE stack separately; the original exact production
-versions are not available in this repository. Validate on a small system and
-record the resolved environment alongside `run_metadata.json`.
+compatible ASE/PyTorch/MACE stack separately; the exact versions used to
+generate the reported trajectories are not available in this repository.
+Validate on a small system and record the resolved environment alongside
+`run_metadata.json`.
 
 The trajectory mirror is named `npt_mace.xyz`. If an existing `md.traj`
 cannot be read, or an output directory contains workflow files but no restart
@@ -60,7 +61,7 @@ use a new `--output-dir`.
 Resume starts a new dynamics segment from the last saved atomic configuration;
 it does not restore Nose-Hoover-chain or barostat internal state. It is therefore
 not a bitwise or exact dynamical checkpoint. Re-equilibrate after each restart
-and exclude that re-equilibration interval from production analysis unless a
+and exclude that interval before calculating equilibrium averages unless a
 future workflow explicitly serializes and restores the complete integrator
 state.
 
