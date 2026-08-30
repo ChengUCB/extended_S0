@@ -1,0 +1,11 @@
+{
+  "schema": "extended_S0.s0_method_provenance.v1",
+  "csv": "S0_k2cut0.02.csv",
+  "csv_sha256": "6e231663b14554a8088ecb903a94202d3dedfab1566fdfb8b31529b02adad11a",
+  "method": "BC fitted kappa_D",
+  "assignment_basis": {
+    "row_count": 190,
+    "n_starts": 4,
+    "diagnostic": "Every row has kappa_used different from kappa_calculated, identifying the fitted-kappa branch."
+  }
+}

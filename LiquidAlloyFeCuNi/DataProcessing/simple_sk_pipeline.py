@@ -47,10 +47,24 @@ def _read_lammpstrj_frame(f, type_to_elem):
     for _ in range(2):
         f.readline()                       # timestep value + "ITEM: NUMBER OF ATOMS"
     natoms = int(f.readline())
-    f.readline()                           # ITEM: BOX BOUNDS ...
+    box_header = f.readline().split()      # ITEM: BOX BOUNDS ...
+    if any(token in {"xy", "xz", "yz", "abc"} for token in box_header[3:]):
+        raise ValueError(
+            "Triclinic LAMMPS boxes are not supported by this pipeline; "
+            "convert to an orthorhombic trajectory or implement the full "
+            "cell-matrix reciprocal grid."
+        )
     cell = np.zeros(3)
+    origin = np.zeros(3)
     for i in range(3):
-        lo, hi = map(float, f.readline().split()[:2])
+        bounds = f.readline().split()
+        if len(bounds) != 2:
+            raise ValueError(
+                "Expected two orthorhombic BOX BOUNDS values per axis; "
+                "triclinic tilt factors are not supported."
+            )
+        lo, hi = map(float, bounds)
+        origin[i] = lo
         cell[i] = hi - lo
     ic, id_kind, xc, yc, zc = _parse_atoms_header(f.readline())
     elems = np.empty(natoms, dtype="U8")
@@ -64,7 +78,11 @@ def _read_lammpstrj_frame(f, type_to_elem):
         else:
             elems[i] = type_to_elem.get(parts[ic], parts[ic])  # numeric → symbol
         x, y, z = float(parts[xc]), float(parts[yc]), float(parts[zc])
-        frac[i] = (x / cell[0], y / cell[1], z / cell[2])
+        frac[i] = (
+            (x - origin[0]) / cell[0],
+            (y - origin[1]) / cell[1],
+            (z - origin[2]) / cell[2],
+        )
     return cell, elems, frac
 
 
@@ -163,21 +181,54 @@ def sk_one_frame(frac, elems, kgrid_2pi, elements):
             sk[(eA, eB)] = (fts[eA] * np.conj(fts[eB]) / math.sqrt(nA * nB)).real
     return sk
 
-def _finalize_block_means(block_means_list):
+def _finalize_block_means(block_means_list, block_sizes=None):
     """
     Given a list of per-block mean dicts [{pair: array}, ...],
-    return {pair: (overall_mean, std_error)}.
+    return {pair: (overall_mean, std_error)}. Unequal blocks are weighted by
+    their frame counts so the overall mean remains the per-frame mean.
     """
     if not block_means_list:
         return {}
     pairs = list(block_means_list[0].keys())
     n = len(block_means_list)
+    weights = (
+        np.ones(n, dtype=float)
+        if block_sizes is None
+        else np.asarray(block_sizes, dtype=float)
+    )
+    if (
+        weights.shape != (n,)
+        or np.any(~np.isfinite(weights))
+        or np.any(weights <= 0)
+    ):
+        raise ValueError("block_sizes must contain one positive value per block")
+
     result = {}
     for pair in pairs:
         stack = np.stack([bm[pair] for bm in block_means_list])  # (n_blocks, n_k)
-        mean = np.nanmean(stack, axis=0)
-        error = np.nanstd(stack, axis=0, ddof=1) / math.sqrt(n) if n > 1 \
-                else np.full_like(mean, np.nan)
+        valid = np.isfinite(stack)
+        point_weights = np.where(valid, weights[:, None], 0.0)
+        total_weight = np.sum(point_weights, axis=0)
+        weighted_sum = np.sum(
+            np.where(valid, stack * weights[:, None], 0.0), axis=0
+        )
+        mean = np.full(stack.shape[1], np.nan, dtype=float)
+        np.divide(weighted_sum, total_weight, out=mean, where=total_weight > 0)
+
+        # With Var(block mean) proportional to 1 / block size, frame counts
+        # are inverse-variance weights. This reduces to the previous standard
+        # error when blocks are equal-sized.
+        centered = np.where(valid, stack - mean[None, :], 0.0)
+        variance_numer = np.sum(point_weights * centered**2, axis=0)
+        error_variance = np.full_like(mean, np.nan)
+        error_denom = (np.sum(valid, axis=0) - 1) * total_weight
+        np.divide(
+            variance_numer,
+            error_denom,
+            out=error_variance,
+            where=error_denom > 0,
+        )
+        error = np.sqrt(error_variance)
         result[pair] = (mean, error)
     return result
 
@@ -207,7 +258,31 @@ def write_sk_file(path, kgrid_real, k_sq, means, errors, pairLabels):
         for mean, error in zip(means, errors):
             row += f" {mean[i]:.6e} {error[i]:.6e}"
         lines.append(row)
-    path.write_text("\n".join(lines) + "\n")
+    with path.open("x", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+
+
+def _existing_sk_outputs(out_dir, label):
+    """Return prior whole/split outputs for one exact label."""
+    out_dir = Path(out_dir)
+    if not out_dir.is_dir():
+        return []
+    full_name = f"{label}-allSk.dat"
+    prefix = f"{label}-"
+    suffix = "-allSk.dat"
+    matches = []
+    for path in out_dir.iterdir():
+        middle = path.name[len(prefix):-len(suffix)]
+        if path.is_file() and (
+            path.name == full_name
+            or (
+                path.name.startswith(prefix)
+                and path.name.endswith(suffix)
+                and middle.isdigit()
+            )
+        ):
+            matches.append(path)
+    return sorted(matches)
 
 
 def build_parser():
@@ -273,6 +348,17 @@ def process_trajectory(
     """
     traj_path = Path(traj_path)
 
+    if n_splits < 1 or n_blocks < 1 or k_bins < 1:
+        raise ValueError("n_splits, n_blocks, and k_bins must all be positive")
+    if label is not None:
+        existing = _existing_sk_outputs(out_dir, label)
+        if existing:
+            names = ", ".join(path.name for path in existing)
+            raise FileExistsError(
+                f"Refusing to mix or overwrite prior S(k) outputs for {label!r}: "
+                f"{names}. Use a new --out-dir or move the old files first."
+            )
+
     print(f"  {traj_path.name}: counting frames...", end=" ", flush=True)
     n_frames = count_frames(traj_path)
     print(n_frames, flush=True)
@@ -281,50 +367,73 @@ def process_trajectory(
         print("    No frames found, skipping.")
         return []
 
-    split_size   = n_frames // n_splits
-    block_size   = max(1, split_size // n_blocks)
-    full_block_size = max(1, n_frames // n_blocks)
+    n_output_splits = min(n_splits, n_frames)
+
+    def balanced_sizes(total, requested_parts):
+        active_parts = min(total, requested_parts)
+        sizes = np.full(active_parts, total // active_parts, dtype=int)
+        sizes[:total % active_parts] += 1
+        return sizes
+
+    split_sizes = balanced_sizes(n_frames, n_output_splits)
+    split_ends = np.cumsum(split_sizes)
+    split_starts = np.concatenate(([0], split_ends[:-1]))
+    split_block_ends = [
+        np.cumsum(balanced_sizes(int(size), n_blocks)) for size in split_sizes
+    ]
+    full_block_ends = np.cumsum(balanced_sizes(n_frames, n_blocks))
 
     # Accumulators: running sum + count for each (split, block_within_split)
     # Indexed as split_acc[split_idx][block_idx] = {pair: sum_array} | None
-    split_acc = [[None] * n_blocks for _ in range(n_splits)]
-    full_acc  = [None] * n_blocks
+    split_acc = [[None] * len(ends) for ends in split_block_ends]
+    full_acc = [None] * len(full_block_ends)
 
-    kgrid_real = kgrid_2pi = k_sq = None
+    kgrid_real = kgrid_2pi = kgrid_indices = None
     elem_counts = {e: 0 for e in elements}
 
     for frame_idx, (cell, elems, frac) in enumerate(
             read_frames(traj_path, type_to_elem)):
 
         if frame_idx == 0:
-            kgrid_real, kgrid_2pi, k_sq = make_kgrid(cell, k_bins)
+            kgrid_real, kgrid_2pi, frame_k_sq = make_kgrid(cell, k_bins)
+            kgrid_indices = kgrid_2pi / (2.0 * math.pi)
             for e in elements:
                 elem_counts[e] = int(np.sum(elems == e))
+        else:
+            # Integer reciprocal indices define the Fourier phases, while
+            # their physical |k|^2 changes with the NPT/NPH cell each frame.
+            frame_k_sq = np.sum(
+                (kgrid_indices / np.asarray(cell)[None, :]) ** 2, axis=1
+            )
         sk = sk_one_frame(frac, elems, kgrid_2pi, elements)
 
-        split_idx = frame_idx // split_size
-        # discard extra frames beyond the last full split
-        if split_idx < n_splits:
-            local       = frame_idx % split_size
-            block_idx   = min(local // block_size, n_blocks - 1)
-            acc = split_acc[split_idx][block_idx]
-            if acc is None:
-                split_acc[split_idx][block_idx] = {p: v.copy() for p, v in sk.items()}
-                split_acc[split_idx][block_idx]["_n"] = 1
-            else:
-                for p, v in sk.items():
-                    acc[p] += v
-                acc["_n"] += 1
+        split_idx = int(np.searchsorted(split_ends, frame_idx, side="right"))
+        local = frame_idx - int(split_starts[split_idx])
+        block_idx = int(
+            np.searchsorted(split_block_ends[split_idx], local, side="right")
+        )
+        acc = split_acc[split_idx][block_idx]
+        if acc is None:
+            split_acc[split_idx][block_idx] = {p: v.copy() for p, v in sk.items()}
+            split_acc[split_idx][block_idx]["_k_sq"] = frame_k_sq.copy()
+            split_acc[split_idx][block_idx]["_n"] = 1
+        else:
+            for p, v in sk.items():
+                acc[p] += v
+            acc["_k_sq"] += frame_k_sq
+            acc["_n"] += 1
 
         # ── accumulate into full-trajectory block ─────────────────────────────
-        fb_idx = min(frame_idx // full_block_size, n_blocks - 1)
+        fb_idx = int(np.searchsorted(full_block_ends, frame_idx, side="right"))
         acc = full_acc[fb_idx]
         if acc is None:
             full_acc[fb_idx] = {p: v.copy() for p, v in sk.items()}
+            full_acc[fb_idx]["_k_sq"] = frame_k_sq.copy()
             full_acc[fb_idx]["_n"] = 1
         else:
             for p, v in sk.items():
                 acc[p] += v
+            acc["_k_sq"] += frame_k_sq
             acc["_n"] += 1
 
         if (frame_idx + 1) % 100 == 0:
@@ -334,18 +443,32 @@ def process_trajectory(
 
     if label is None:
         label = composition_label(elem_counts, elements)
+    existing = _existing_sk_outputs(out_dir, label)
+    if existing:
+        names = ", ".join(path.name for path in existing)
+        raise FileExistsError(
+            f"Refusing to mix or overwrite prior S(k) outputs for {label!r}: "
+            f"{names}. Use a new --out-dir or move the old files first."
+        )
 
     pairs = list(combinations_with_replacement(elements, 2))
 
     # ── convert accumulators → block means → mean + error ────────────────────
     def acc_to_block_means(acc_list):
         block_means = []
+        block_sizes = []
+        block_k_sq = []
         for acc in acc_list:
             if acc is None:
                 continue
             n = acc["_n"]
             block_means.append({p: acc[p] / n for p in pairs})
-        return block_means
+            block_sizes.append(n)
+            block_k_sq.append(acc["_k_sq"] / n)
+        mean_k_sq = np.average(
+            np.stack(block_k_sq), axis=0, weights=np.asarray(block_sizes)
+        )
+        return block_means, block_sizes, mean_k_sq
 
     def unpack(averaged):
         """Split {pair: (mean, error)} into parallel label/mean/error lists."""
@@ -357,16 +480,18 @@ def process_trajectory(
             errors.append(error)
         return labels, means, errors
 
-    for s in range(n_splits):
-        averaged = _finalize_block_means(acc_to_block_means(split_acc[s]))
+    for s in range(n_output_splits):
+        block_means, block_sizes, split_k_sq = acc_to_block_means(split_acc[s])
+        averaged = _finalize_block_means(block_means, block_sizes)
         pairLabels, means, errors = unpack(averaged)
         write_sk_file(out_dir / f"{label}-{s + 1}-allSk.dat",
-                      kgrid_real, k_sq, means, errors, pairLabels)
+                      kgrid_real, split_k_sq, means, errors, pairLabels)
 
-    averaged_full = _finalize_block_means(acc_to_block_means(full_acc))
+    block_means, block_sizes, full_k_sq = acc_to_block_means(full_acc)
+    averaged_full = _finalize_block_means(block_means, block_sizes)
     pairLabels, means, errors = unpack(averaged_full)
     write_sk_file(out_dir / f"{label}-allSk.dat",
-                  kgrid_real, k_sq, means, errors, pairLabels)
+                  kgrid_real, full_k_sq, means, errors, pairLabels)
 
 
 def _collect_trajectories(args):

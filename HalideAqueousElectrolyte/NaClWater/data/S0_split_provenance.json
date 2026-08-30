@@ -1,0 +1,15 @@
+{
+  "schema": "extended_S0.naclwater_split_provenance.v1",
+  "note": "The retained split1--3 CSV bytes historically store split=0. The effective split is recoverable from both the CSV filename and every source allSk.dat filename; consumers should use scripts/sk_s0_common.py:load_tracked_split_csv.",
+  "files": {
+    "S0_NaClWater_individual_OZ_split1.csv": {"sha256": "bde1f0c4a8955b8dd87ba451912af68afa5e04eac45a2eb4fa3d9bde413b5e34", "raw_split": 0, "effective_split": 1},
+    "S0_NaClWater_individual_OZ_split2.csv": {"sha256": "9c8941f07867c391e2f5c4c42b1e634f571af56ed1bb969fba674e65a0fad7e7", "raw_split": 0, "effective_split": 2},
+    "S0_NaClWater_individual_OZ_split3.csv": {"sha256": "1fced04f2de35e0595f94dbd6b6bae463b8f7e840ace94280fd55e16f59d461b", "raw_split": 0, "effective_split": 3},
+    "S0_NaClWater_matrix_BC_s_loss_split1.csv": {"sha256": "b4d43a50a412aac62101026fb6e43adf644dc648b46e82b194e3d8d4c734288f", "raw_split": 0, "effective_split": 1},
+    "S0_NaClWater_matrix_BC_s_loss_split2.csv": {"sha256": "ac375469bf70f9c676ac44d115c574f5a243d4cd681c26216fd36d6b646d6d74", "raw_split": 0, "effective_split": 2},
+    "S0_NaClWater_matrix_BC_s_loss_split3.csv": {"sha256": "ca195b3adb6da90f32fd9c076e9f90f44328aad32eef55a7f0f7a7455ea9f626", "raw_split": 0, "effective_split": 3},
+    "S0_NaClWater_matrix_OZ_s_loss_split1.csv": {"sha256": "8fb06d188355c77a5c2f47e6e174aea9ccdab3acddcc4f2d92eeea4fe183da4c", "raw_split": 0, "effective_split": 1},
+    "S0_NaClWater_matrix_OZ_s_loss_split2.csv": {"sha256": "1984adf1189c5630a156c6469bce772d235d6cd0e190e3af728112246c917a37", "raw_split": 0, "effective_split": 2},
+    "S0_NaClWater_matrix_OZ_s_loss_split3.csv": {"sha256": "a780673a8b5381f5f206c8866cda3af230f01b3fe5d329bcab1fd1244ee35d4d", "raw_split": 0, "effective_split": 3}
+  }
+}

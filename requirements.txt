@@ -1,0 +1,6 @@
+# Analysis/notebook environment. The exact smoke-test subset is pinned above.
+-r requirements-smoke.txt
+
+# PyTorch wheels are platform-specific; keep the supported major range explicit.
+torch>=2.1,<3
+mpltern>=1.0,<2

@@ -27,6 +27,12 @@ Trajectory -> S(k) processing script. Reads LAMMPS dump files, splits each
 trajectory into `--n-splits` segments with block averaging, and writes the
 partial structure factors `S_ab(k)`
 
+Physical `k^2` follows each frame's orthorhombic box. Triclinic LAMMPS dumps
+are rejected because this compact reader does not implement a full reciprocal
+cell matrix. Existing whole/split outputs for a label are also rejected rather
+than overwritten or mixed with a different block count; choose a new
+`--out-dir` or move the previous result set.
+
 ### `NaClWater/`
 
 - `data/S0_NaClWater_matrix_BC_s_loss_split*.csv`
@@ -63,6 +69,13 @@ partial structure factors `S_ab(k)`
   - NaF: `mu_Na + mu_F`
 - BC tables use the fixed-Debye-length protocol unless stated otherwise in the `method` column.
 - The extractor filenames contain `split0` historically; use the `--split` argument to process other splits.
+- The nine retained NaClWater `split1`--`split3` CSVs historically contain
+  `split = 0`. Their source bytes are intentionally unchanged. The checksum
+  contract in `NaClWater/data/S0_split_provenance.json` records the effective
+  split recovered independently from the CSV and `allSk.dat` filenames;
+  Python consumers should use
+  `NaClWater/scripts/sk_s0_common.py::load_tracked_split_csv`, which validates
+  the contract and corrects only its in-memory dataframe.
 
 ## Example
 

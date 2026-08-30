@@ -77,8 +77,23 @@ Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
 | Item | Needs |
 |---|---|
 | both notebooks | shared requirements + `pandas`, `matplotlib`, `scipy` |
-| `generate_md_inputs.py` | `numpy`|
+| `generate_md_inputs.py` | Python standard library only |
 | running the MD itself | LAMMPS |
 
 `gpr_grad` classes used here: `DirectionalGradientGP`, `InputWarpedKernelFunction`,
 `GibbsKernelFunction`.
+
+The production notebook's local helper modules are included in this directory.
+For companion checkout variables and the validated notebook entry, see the
+[top-level reproducibility guide](../REPRODUCIBILITY.md).
+
+MD input generation is manifest-driven:
+
+```bash
+python generate_md_inputs.py --manifest /path/to/composition-manifest.json \
+  --output-root /path/to/MD_inputs
+```
+
+The schema is `md_input_manifest.schema.json`. The bundled
+`md_input_manifest.sample.json` is deliberately labeled as a non-production
+smoke case and must not be used as scientific composition data.

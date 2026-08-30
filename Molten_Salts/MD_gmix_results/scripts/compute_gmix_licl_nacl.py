@@ -7,31 +7,58 @@ provide the statistical uncertainty.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
 from matplotlib.lines import Line2D
 from matplotlib.container import ErrorbarContainer
 from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 
-from plot_mgcl2_nacl_workflow_3x1 import TARGET_T_K, ebar
+from input_validation import (
+    require_converged,
+    require_count_fraction,
+    require_finite_numeric,
+    require_integer_columns,
+)
+from plot_helpers import TARGET_T_K, ebar
+from workflow_io import (
+    build_provenance,
+    load_bundled_method_contract,
+    output_paths,
+    provenance_columns,
+    require_new_outputs,
+    require_provenance_unchanged,
+)
+
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
+
+try:
+    from gpr_grad import GradientGP, RBFKernelFunction
+    from szero import prepare_gp_gradient_data
+except ModuleNotFoundError:
+    GradientGP = RBFKernelFunction = prepare_gp_gradient_data = None
 
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
-SOURCE_ROOT = REPO_ROOT / "external" / "multi_S0_GP_test"
 S0_DIR = REPO_ROOT / "MD_Sk_results"
+BUNDLED_S0 = S0_DIR / "S0_k2cut0.02.csv"
 
 
 CUTS = (0.02,)
 
 
 SOURCE = "repo"
+FIXED_FIT_METHOD = "BC fixed kappa_D"
+FITTED_FIT_METHOD = "BC fitted kappa_D"
+FIT_METHODS = (FIXED_FIT_METHOD, FITTED_FIT_METHOD)
+FIT_METHOD = FITTED_FIT_METHOD
 
 
 SOURCE_SPEC = {
@@ -62,11 +89,15 @@ INPUTS: dict[float, Path] = {}
 OUTPUT_DIR = HERE / "outputs" / "LiCl_NaCl_charge_neutral_GP"
 
 
-def output_pdf() -> Path:
+def output_pdf(input_identity: str) -> Path:
     tag = "_vs_".join(f"{k:g}" for k in reversed(CUTS)) if len(CUTS) > 1 \
         else f"{CUTS[0]:g}"
     suffix = "newdata" if SOURCE == "mine" else SOURCE
-    return OUTPUT_DIR / f"LiCl_NaCl_kcut{tag}_workflow_3x1_{suffix}.pdf"
+    method = "fixed-kappa" if FIT_METHOD == FIXED_FIT_METHOD else "fitted-kappa"
+    return OUTPUT_DIR / (
+        f"LiCl_NaCl_kcut{tag}_workflow_3x1_{suffix}_{method}_"
+        f"{input_identity[:12]}.pdf"
+    )
 
 KB_IN_EV_PER_K = 8.617333262145e-5
 KB_T_EV = KB_IN_EV_PER_K * TARGET_T_K
@@ -86,20 +117,49 @@ COLUMN_MAP = {
     "S_NaNa": "S0_NaNa",
 }
 
-sys.path[:0] = [
-    str(SOURCE_ROOT / "GPR_grad"),
-    str(SOURCE_ROOT / "S0_multi"),
-]
-from gpr_grad import GradientGP, RBFKernelFunction
-from szero import prepare_gp_gradient_data
+
+def require_analysis_dependencies() -> None:
+    missing = []
+    if torch is None:
+        missing.append("torch")
+    if GradientGP is None:
+        missing.extend(("gpr_grad", "szero"))
+    if missing:
+        raise RuntimeError(
+            "Missing analysis dependencies: " + ", ".join(missing) + ". "
+            "Install the repository requirements and make the companion "
+            "ChengUCB/GPR_grad and ChengUCB/S0_multi packages importable; "
+            "see MD_gmix_results/README.md."
+        )
 
 
-def load_input(path: Path, expected_kcut: float) -> pd.DataFrame:
+def resolve_fit_method(requested: str | None, has_explicit_input: bool) -> str:
+    if requested is not None:
+        return requested
+    return FIXED_FIT_METHOD if has_explicit_input else FITTED_FIT_METHOD
+
+
+def load_input(
+    path: Path, expected_kcut: float, fit_method: str | None = None
+) -> pd.DataFrame:
+    selected_method = FIT_METHOD if fit_method is None else fit_method
+    if selected_method not in FIT_METHODS:
+        raise ValueError(
+            f"unsupported fit method {selected_method!r}; choose from {FIT_METHODS}"
+        )
+    if not np.isfinite(expected_kcut) or expected_kcut <= 0.0:
+        raise ValueError("expected_kcut must be a finite positive value")
     frame = pd.read_csv(path)
+    if "method" not in frame.columns:
+        frame["method"] = load_bundled_method_contract(
+            path, BUNDLED_S0, FIT_METHODS
+        )
     required = {
         "system",
+        "tag",
         "x_LiCl",
         "split",
+        "method",
         SOURCE_SPEC[SOURCE][1],
         SOURCE_SPEC[SOURCE][2],
         "n_Li",
@@ -118,14 +178,49 @@ def load_input(path: Path, expected_kcut: float) -> pd.DataFrame:
 
     frame = frame.loc[
         (frame["system"] == "LiCl-NaCl")
-        & np.isclose(frame[SOURCE_SPEC[SOURCE][1]], expected_kcut)
+        & frame["method"].eq(selected_method)
     ].copy()
+    cut_column = SOURCE_SPEC[SOURCE][1]
+    require_finite_numeric(frame, (cut_column,), path)
+    frame = frame.loc[np.isclose(frame[cut_column], expected_kcut)].copy()
     if frame.empty:
-        raise ValueError(f"{path.name}: no rows at kcut={expected_kcut}.")
+        raise ValueError(
+            f"{path.name}: no LiCl-NaCl rows at kcut={expected_kcut} "
+            f"for method {selected_method!r}."
+        )
+    if frame["tag"].isna().any() or frame["tag"].astype(str).str.strip().eq("").any():
+        raise ValueError(f"{path.name}: tag must contain non-empty values.")
+
+    count_columns = ("n_Li", "n_Cl", "n_Na")
+    numeric_columns = (
+        "x_LiCl",
+        "split",
+        *count_columns,
+        "S0_LiLi",
+        "S0_LiCl",
+        "S0_LiNa",
+        "S0_ClCl",
+        "S0_ClNa",
+        "S0_NaNa",
+    )
+    require_finite_numeric(frame, numeric_columns, path)
+    require_integer_columns(frame, ("split",), path, nonnegative=True)
+    require_integer_columns(frame, count_columns, path, nonnegative=True)
+    duplicates = frame.duplicated(["tag", "split"], keep=False)
+    if duplicates.any():
+        raise ValueError(
+            f"{path.name}: duplicate tag/split rows remain after method selection."
+        )
     if 0 not in set(frame["split"].unique()):
         raise ValueError(f"{path.name}: split 0 (whole-window fit) is missing.")
-    if not frame[SOURCE_SPEC[SOURCE][2]].astype(bool).all():
-        raise ValueError(f"{path.name}: at least one selected S(0) fit did not converge.")
+    require_converged(frame[SOURCE_SPEC[SOURCE][2]], path, SOURCE_SPEC[SOURCE][2])
+    require_count_fraction(
+        frame,
+        path,
+        composition_column="x_LiCl",
+        solute_count_column="n_Li",
+        solvent_count_column="n_Na",
+    )
 
     n_ions = frame["n_Li"] + frame["n_Cl"] + frame["n_Na"]
     frame["x_Li"] = frame["n_Li"] / n_ions
@@ -365,27 +460,61 @@ def process_cutoff(path: Path, kcut: float, y_grid: np.ndarray) -> dict:
 
 
 def main() -> None:
-    global CUTS, INPUTS, OUTPUT_PDF, SOURCE
+    global CUTS, FIT_METHOD, INPUTS, OUTPUT_PDF, SOURCE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source", choices=tuple(SOURCE_SPEC), default=SOURCE,
-        help="which S(0) tables to read (default: mine)",
+        help="which S(0) tables to read (default: repo)",
     )
     parser.add_argument(
         "--cuts", type=float, nargs="+", default=list(CUTS),
         metavar="KCUT",
-        help="one or two k^2 cuts (default: 0.02 0.01).  With one cut the "
+        help="one or two k^2 cuts (default: 0.02).  With one cut the "
              "figure shows that cut alone.",
+    )
+    parser.add_argument(
+        "--input", type=Path, default=None,
+        help="canonical S0_k2cut CSV written by fit_S0.py (one cut only; "
+             "defaults --fit-method to fixed)",
+    )
+    parser.add_argument(
+        "--fit-method", choices=FIT_METHODS, default=None,
+        help="S(0) fit variant. Default: fitted for the tracked no --input "
+             "production table; fixed for an explicit canonical --input.",
     )
     args = parser.parse_args()
     SOURCE = args.source
+    FIT_METHOD = resolve_fit_method(args.fit_method, args.input is not None)
     if not 1 <= len(args.cuts) <= 2:
         parser.error("--cuts takes one or two values")
     CUTS = tuple(args.cuts)
-    INPUTS = {kcut: input_path(kcut) for kcut in CUTS}
-    OUTPUT_PDF = output_pdf()
+    if args.input is not None:
+        if SOURCE != "repo":
+            parser.error("--input expects the canonical --source repo schema")
+        if len(CUTS) != 1:
+            parser.error("--input can only be used with one --cuts value")
+        input_csv = args.input.expanduser().resolve()
+        if not input_csv.is_file():
+            parser.error(f"--input does not exist: {input_csv}")
+        INPUTS = {CUTS[0]: input_csv}
+    else:
+        INPUTS = {kcut: input_path(kcut) for kcut in CUTS}
+    provenance, input_identity = build_provenance(INPUTS)
+    OUTPUT_PDF = output_pdf(input_identity)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_targets = output_paths(OUTPUT_PDF)
+    require_new_outputs(output_targets)
     print(f"source={SOURCE}: k^2 cut(s) " + ", ".join(f"{c:g}" for c in CUTS))
+    for kcut, path in INPUTS.items():
+        print(f"input[kcut^2={kcut:g}]={path}")
+    method_origin = (
+        "explicit --fit-method"
+        if args.fit_method is not None
+        else ("canonical --input default" if args.input is not None else "no --input default")
+    )
+    print(f"fit_method={FIT_METHOD!r} ({method_origin})")
 
+    require_analysis_dependencies()
     torch.set_default_dtype(torch.float64)
     np.random.seed(7)
     torch.manual_seed(7)
@@ -587,7 +716,12 @@ def main() -> None:
         lw=1.0,
         label="Ideal",
     )
-    dense_rows = {"x_LiCl": y_grid}
+    dense_rows = {
+        "x_LiCl": y_grid,
+        **provenance_columns(
+            provenance, input_identity, FIT_METHOD, SOURCE
+        ),
+    }
     for kcut in CUTS:
         result = processed[kcut]
         style = styles[kcut]
@@ -685,13 +819,15 @@ def main() -> None:
             fontsize=9,
         )
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_png = OUTPUT_PDF.with_suffix(".png")
-    output_csv = OUTPUT_PDF.with_suffix(".csv")
-    output_gp_band_pdf = OUTPUT_PDF.with_name(
-        OUTPUT_PDF.stem + "_GP_errorband.pdf"
-    )
-    output_gp_band_png = output_gp_band_pdf.with_suffix(".png")
+    (
+        _,
+        output_png,
+        output_csv,
+        output_gp_band_pdf,
+        output_gp_band_png,
+    ) = output_targets
+    require_provenance_unchanged(provenance)
+    require_new_outputs(output_targets)
     pd.DataFrame(dense_rows).to_csv(output_csv, index=False)
     fig.subplots_adjust(left=0.25, right=0.98, bottom=0.08, top=0.985, hspace=0.18)
 

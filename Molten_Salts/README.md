@@ -18,9 +18,14 @@ and the cutoff `0 < k^2 <= 0.02 cycles^2 A^-2`
 | `MD_gmix_results/` | Mixing-thermodynamics notebook and scripts |
 | `MD_structure_analysis/` | RDF, coordination, short-range-order data, figures, and scripts |
 
-Raw trajectories and the MACELES model checkpoint are not included because of
-their size. Scripts use command-line inputs or repository-relative paths; no
-machine-specific trajectory path is committed.
+Raw trajectories are not included because of their size. The tracked
+`MD_inputs/salt-MACELES.model` checkpoint has SHA-256
+`15dc639aae415aaf9f6a1e7b5f853836111313b4214dbdafcc1ad9553041a70b`;
+its original download/source record is not present, so the digest verifies
+file identity but not provenance. Treat it as a trusted-code artifact and load
+it only after accepting the repository source. Scripts otherwise use
+command-line inputs or repository-relative paths; no machine-specific
+trajectory path is committed.
 
 ## S(k) and S(0) policy
 
@@ -30,7 +35,11 @@ salt systems, all 19 compositions per system, the complete 200 ps window
 
 `MD_Sk_results/S0_k2cut0.02.csv` is the only S(0) data file. It contains the
 whole-window and block fits for both systems. The `system` column distinguishes
-LiCl-NaCl from MgCl2-NaCl.
+LiCl-NaCl from MgCl2-NaCl. Its original bytes do not contain a `method` column;
+the adjacent checksum-pinned provenance sidecar identifies all rows as the
+`BC fitted kappa_D` branch. Fresh `fit_S0.py` output contains both fixed- and
+fitted-kappa rows with explicit method labels; the Gmix CLI documents its
+input-aware defaults and rejects other unlabeled tables.
 
 The partial structure factors use
 
@@ -49,6 +58,10 @@ factor.
 - `MD_gmix_results/` contains the downstream mixing-free-energy workflow.
 - `MD_structure_analysis/README.md` documents the structural-analysis chain.
 
-Python requirements include NumPy, SciPy, pandas, Matplotlib, ASE, Numba,
-PyTorch, and MACE. Some gradient-GP helper modules referenced by the
-provenance scripts are not part of this data-only repository.
+The root `requirements.txt` is the analysis/notebook environment; it does not
+claim to reproduce the original MD runtime. Running the NPT scripts separately
+requires ASE, PyTorch, and MACE with the APIs used by the scripts. The exact
+production versions were not preserved, so install them in an isolated
+environment, verify the checkpoint on a small system, and record `pip freeze`
+with the run metadata. The Gmix scripts additionally import the public
+companion packages `ChengUCB/GPR_grad` and `ChengUCB/S0_multi`.

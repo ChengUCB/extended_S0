@@ -1,7 +1,9 @@
-"""Common file I/O, preprocessing, and CSV helpers for split-0 S0 extraction."""
+"""Common file I/O, preprocessing, and CSV helpers for S0 extraction."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -13,6 +15,8 @@ import pandas as pd
 
 DEFAULT_KCUTS = (0.0025, 0.005, 0.01)
 DAT_RE = re.compile(r"^O(?P<o>\d+)-Na(?P<na>\d+)-Cl(?P<cl>\d+)(?:-(?P<split>\d+))?-allSk\.dat$")
+TRACKED_SPLIT_CSV_RE = re.compile(r"_split(?P<split>[123])\.csv$")
+LEGACY_SPLIT_CONTRACT_SCHEMA = "extended_S0.naclwater_split_provenance.v1"
 
 OX_COMPONENTS = ("OO", "OX", "XX")
 ALLPAIR_COMPONENTS = ("OO", "ONa", "OCl", "NaNa", "NaCl", "ClCl")
@@ -108,6 +112,78 @@ def parse_sk_file(path: Path, source: str = "main") -> SkFile | None:
     )
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_tracked_split_csv(
+    path: Path, contract_path: Path | None = None
+) -> pd.DataFrame:
+    """Return the checksum-pinned legacy split CSV with canonical split metadata.
+
+    The nine checked-in split1--3 CSVs historically store ``split = 0`` even
+    though their filenames and source ``allSk.dat`` names identify the actual
+    split.  Their bytes are retained as scientific source data.  This loader
+    validates the tracked contract and corrects only the returned dataframe.
+    """
+    path = Path(path)
+    contract_path = (
+        path.parent / "S0_split_provenance.json"
+        if contract_path is None
+        else Path(contract_path)
+    )
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Cannot read split provenance contract {contract_path}"
+        ) from exc
+    if (
+        not isinstance(contract, dict)
+        or contract.get("schema") != LEGACY_SPLIT_CONTRACT_SCHEMA
+        or not isinstance(contract.get("files"), dict)
+    ):
+        raise RuntimeError(f"Invalid split provenance contract {contract_path}")
+    entry = contract["files"].get(path.name)
+    required = {"sha256", "raw_split", "effective_split"}
+    if not isinstance(entry, dict) or required.difference(entry):
+        raise ValueError(f"{path.name} is not declared by {contract_path.name}")
+    filename_match = TRACKED_SPLIT_CSV_RE.search(path.name)
+    if filename_match is None:
+        raise ValueError(f"{path.name} does not identify a canonical split")
+    filename_split = int(filename_match.group("split"))
+    raw_split = int(entry["raw_split"])
+    effective_split = int(entry["effective_split"])
+    if raw_split != 0 or effective_split != filename_split:
+        raise RuntimeError(
+            f"{path.name} split provenance conflicts with its filename"
+        )
+    if _sha256_file(path) != entry["sha256"]:
+        raise RuntimeError(
+            f"{path.name} checksum does not match {contract_path.name}; "
+            "refusing to reinterpret split metadata"
+        )
+
+    frame = pd.read_csv(path)
+    if "split" not in frame.columns or "file" not in frame.columns or frame.empty:
+        raise ValueError(f"{path.name} does not satisfy the tracked S(0) CSV schema")
+    raw_values = pd.to_numeric(frame["split"], errors="coerce")
+    if raw_values.isna().any() or not raw_values.eq(raw_split).all():
+        raise RuntimeError(f"{path.name} raw split values violate its provenance contract")
+    source_suffix = f"-{effective_split}-allSk.dat"
+    if not frame["file"].astype(str).str.endswith(source_suffix).all():
+        raise RuntimeError(
+            f"{path.name} source filenames do not identify split {effective_split}"
+        )
+    frame = frame.copy()
+    frame["split"] = effective_split
+    return frame
+
+
 def discover_split_files(data_dir: Path, source: str = "main", split: int = 0) -> list[SkFile]:
     files = []
     seen: set[tuple[int, int, int]] = set()
@@ -193,7 +269,7 @@ def base_s0_row(algorithm: str, method: str, item: SkFile, kcut: float) -> dict[
         "method": method,
         "kcut": kcut,
         "file": item.path.name,
-        "split": 0,
+        "split": item.split,
         "source": item.source,
         "n_O": item.n_o,
         "n_Na": item.n_na,

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Generate LAMMPS input-config.dat files from an editable composition list.
+"""Generate LAMMPS input-config.dat files from a composition manifest.
 
-Edit only ``level_composition`` below, then run:
+Preferred reproducible entry point:
 
-    python3 generate_md_inputs.py
+    python3 generate_md_inputs.py --manifest composition.json
+
+The manifest contract is documented by ``md_input_manifest.schema.json``.  The
+inline ``level_composition`` mapping remains available for backwards-compatible
+local use, but an empty mapping is an error instead of a successful no-op.
 """
 
 from __future__ import annotations
@@ -900,6 +904,7 @@ from pathlib import Path
 
 
 DEFAULT_OUTPUT = Path("MD_inputs")
+MANIFEST_SCHEMA_VERSION = 1
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 REQUIRED_FIELDS = {
     "n_para", "n_water", "n_ethanol", "box_edge_angstrom", "seed"
@@ -927,13 +932,60 @@ def validate_level(level, composition):
     if composition["n_water"] + composition["n_ethanol"] < 1:
         raise ValueError("%s: at least one solvent molecule is required" % level)
     edge = composition["box_edge_angstrom"]
-    if not isinstance(edge, (int, float)) or edge <= 0:
-        raise ValueError("%s: box_edge_angstrom must be positive" % level)
+    if (
+        isinstance(edge, bool)
+        or not isinstance(edge, (int, float))
+        or not math.isfinite(edge)
+        or edge <= 0
+    ):
+        raise ValueError("%s: box_edge_angstrom must be a finite positive number" % level)
     return dict(composition)
 
 
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_composition_manifest(path):
+    """Load the versioned external composition contract used by the CLI."""
+    manifest_path = Path(path)
+    try:
+        document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise FileNotFoundError("composition manifest does not exist: %s" % manifest_path) from error
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "%s is not valid JSON (line %d, column %d)"
+            % (manifest_path, error.lineno, error.colno)
+        ) from error
+    if not isinstance(document, dict):
+        raise ValueError("composition manifest must be a JSON object")
+    allowed = {"schema_version", "level_composition"}
+    unknown = sorted(set(document) - allowed)
+    if unknown:
+        raise ValueError("composition manifest has unknown field(s): " + ", ".join(unknown))
+    schema_version = document.get("schema_version")
+    if isinstance(schema_version, bool) or schema_version != MANIFEST_SCHEMA_VERSION:
+        raise ValueError(
+            "composition manifest schema_version must be %d" % MANIFEST_SCHEMA_VERSION
+        )
+    if "level_composition" not in document:
+        raise ValueError("composition manifest is missing level_composition")
+    levels = document["level_composition"]
+    if not isinstance(levels, dict) or not levels:
+        raise ValueError("composition manifest level_composition must be a non-empty object")
+    return levels, {
+        "name": manifest_path.name,
+        "sha256": sha256_file(manifest_path),
+    }
 
 
 def header_atom_count(path):
@@ -946,18 +998,126 @@ def header_atom_count(path):
     return None
 
 
-def build_levels(levels, output_root=DEFAULT_OUTPUT, quiet=False):
+def validate_existing_case(case_dir, expected_info):
+    """Refuse to reuse output unless metadata and content checksum both match."""
+    case_dir = Path(case_dir)
+    data_path = case_dir / "input-config.dat"
+    info_path = case_dir / "case_info.json"
+    if not info_path.is_file():
+        raise RuntimeError(
+            "%s: input-config.dat exists without case_info.json; remove or move the case "
+            "directory before regenerating" % expected_info["level"]
+        )
+    try:
+        existing_info = json.loads(info_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "%s: case_info.json is invalid JSON; remove or move the case directory"
+            % expected_info["level"]
+        ) from error
+    if not isinstance(existing_info, dict):
+        raise RuntimeError("%s: case_info.json must contain an object" % expected_info["level"])
+
+    mismatched = [
+        key for key, value in expected_info.items()
+        if key not in existing_info or existing_info[key] != value
+    ]
+    if mismatched:
+        raise RuntimeError(
+            "%s: existing input metadata differs for %s; use a new --output-root or "
+            "remove/move that case directory"
+            % (expected_info["level"], ", ".join(mismatched))
+        )
+    recorded_checksum = existing_info.get("input_sha256")
+    if not isinstance(recorded_checksum, str) or not recorded_checksum:
+        raise RuntimeError(
+            "%s: case_info.json has no input_sha256; remove/move this unverified legacy case"
+            % expected_info["level"]
+        )
+    actual_checksum = sha256_file(data_path)
+    if actual_checksum != recorded_checksum:
+        raise RuntimeError(
+            "%s: input-config.dat checksum differs from case_info.json; refusing stale or "
+            "modified input" % expected_info["level"]
+        )
+    return actual_checksum
+
+
+def validate_output_root(output_root, expected_levels, composition_manifest, generator_sha256):
+    """Require an existing root manifest to describe exactly this rerun."""
+    output_root = Path(output_root)
+    manifest_path = output_root / "manifest.json"
+    entries = list(output_root.iterdir())
+    if not manifest_path.exists():
+        if entries:
+            raise RuntimeError(
+                "%s contains files but no manifest.json; use a new --output-root "
+                "or move the legacy contents" % output_root
+            )
+        return
+    try:
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "%s is invalid JSON; refusing to reuse this output root" % manifest_path
+        ) from error
+    if not isinstance(existing, dict):
+        raise RuntimeError("%s must contain a JSON object" % manifest_path)
+
+    recorded_cases = existing.get("cases")
+    if not isinstance(recorded_cases, list) or not all(
+        isinstance(case, dict) and isinstance(case.get("level"), str)
+        for case in recorded_cases
+    ):
+        raise RuntimeError("%s has no valid cases list" % manifest_path)
+    recorded_levels = {case["level"] for case in recorded_cases}
+    expected_levels = set(expected_levels)
+    actual_levels = {entry.name for entry in entries if entry.is_dir()}
+    mismatches = []
+    if existing.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        mismatches.append("schema_version")
+    if existing.get("composition_manifest") != composition_manifest:
+        mismatches.append("composition_manifest")
+    if existing.get("generator_sha256") != generator_sha256:
+        mismatches.append("generator_sha256")
+    if recorded_levels != expected_levels:
+        mismatches.append("case set")
+    if actual_levels != recorded_levels:
+        mismatches.append("case directories")
+    if mismatches:
+        raise RuntimeError(
+            "%s differs for %s; use a new --output-root or move the existing "
+            "root before generating" % (manifest_path, ", ".join(mismatches))
+        )
+
+
+def build_levels(levels, output_root=DEFAULT_OUTPUT, quiet=False, composition_manifest=None):
     if not isinstance(levels, dict):
         raise ValueError("level_composition must be a dictionary")
     if not levels:
-        print("level_composition is empty; add entries using the commented format at the top.")
-        return 0
+        raise ValueError(
+            "level_composition is empty; provide --manifest FILE using "
+            "md_input_manifest.schema.json"
+        )
 
     output_root = Path(output_root).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     template_bytes = MOLECULE_TEMPLATE.encode("utf-8")
     template_checksum = hashlib.sha256(template_bytes).hexdigest()
-    manifest = {"case_count": len(levels), "cases": []}
+    generator_checksum = sha256_file(Path(__file__))
+    validate_output_root(
+        output_root,
+        levels,
+        composition_manifest,
+        generator_checksum,
+    )
+    manifest = {
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "case_count": len(levels),
+        "composition_manifest": composition_manifest,
+        "generator_sha256": generator_checksum,
+        "cases": [],
+    }
 
     with tempfile.TemporaryDirectory(prefix="md-input-template-") as temp_dir:
         template_path = Path(temp_dir) / "molecule-templates.dat"
@@ -978,9 +1138,11 @@ def build_levels(levels, output_root=DEFAULT_OUTPUT, quiet=False):
                 **composition,
                 "n_atoms_expected": n_atoms,
                 "template_sha256": template_checksum,
+                "generator_sha256": generator_checksum,
             }
 
             if data_path.exists():
+                info["input_sha256"] = validate_existing_case(case_dir, info)
                 status = "skip"
             else:
                 stream = contextlib.nullcontext()
@@ -1005,7 +1167,9 @@ def build_levels(levels, output_root=DEFAULT_OUTPUT, quiet=False):
                 shake_header = handle.readline()
             if "bond type = 14" not in shake_header or "angle type = 18" not in shake_header:
                 raise RuntimeError(level + ": unexpected SHAKE type mapping")
-            write_json(case_dir / "case_info.json", info)
+            if status == "built":
+                info["input_sha256"] = sha256_file(data_path)
+                write_json(case_dir / "case_info.json", info)
             manifest["cases"].append(info)
             print("[%d/%d] %s %s" % (index, len(levels), level, status))
 
@@ -1014,9 +1178,37 @@ def build_levels(levels, output_root=DEFAULT_OUTPUT, quiet=False):
     return 0
 
 
-def standalone_main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="versioned JSON composition manifest (recommended)",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help="output directory (default: %(default)s)",
+    )
+    parser.add_argument("--quiet", action="store_true", help="suppress generator details")
+    return parser.parse_args(argv)
+
+
+def standalone_main(argv=None):
     try:
-        return build_levels(level_composition)
+        args = parse_args(argv)
+        levels = level_composition
+        source = {"kind": "inline level_composition", "sha256": None}
+        if args.manifest is not None:
+            levels, source = load_composition_manifest(args.manifest)
+            source["kind"] = "file"
+        return build_levels(
+            levels,
+            output_root=args.output_root,
+            quiet=args.quiet,
+            composition_manifest=source,
+        )
     except (OSError, ValueError, RuntimeError) as error:
         raise SystemExit("ERROR: %s" % error)
 

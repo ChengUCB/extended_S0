@@ -31,6 +31,11 @@ factors `S_αβ(k)` on a small-k grid, with block averaging and trajectory split
 for error bars. Writes one file per split (`{label}-{split}-allSk.dat`) plus a
 full-trajectory file (`{label}-allSk.dat`). Columns: `k^2` followed by a
 `mean error` pair per element pair (`FeFe`, `FeCu`, `FeNi`, `CuCu`, `CuNi`, `NiNi`).
+Physical `k^2` is evaluated from every frame's box and averaged with the same
+frame weights as `S(k)`. The reader accepts orthorhombic boxes only and rejects
+triclinic tilt instead of silently using an invalid reciprocal grid. Existing
+whole/split files for the same label are never overwritten; use a fresh
+`--out-dir` or move the prior result set before rerunning.
 
 ```shell
 python3 DataProcessing/simple_sk_pipeline.py \
@@ -82,4 +87,3 @@ Beyond the shared GP + S0 requirements in the [top-level README](../README.md)
 | 2 — `simple_sk_pipeline.py` |  `numba` `numpy` |
 | 3 — `extract_FeCuNi_matrix_s0_all_splits.py` | `numpy` |
 | 4 — notebook | shared requirements + `pandas`, `matplotlib`, `mpltern` |
-

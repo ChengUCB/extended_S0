@@ -144,33 +144,41 @@ def frame_iterator(path: Path, source: str, first: int, last: int):
 def average_group(frames, n_error_blocks: int):
     """Average a list of per-frame results and estimate an error from sub-blocks.
 
-    frames is a list of (sk_dict, k_sq) pairs.  We split it into
-    n_error_blocks contiguous pieces, average each piece, then take the scatter
-    of those piece-averages as the error.
+    frames is a list of (sk_dict, k_sq) pairs.  The reported value is the direct
+    frame average, so unequal error-block sizes cannot bias it.  We split the
+    frames into contiguous pieces only to estimate the error from the scatter
+    of the piece averages.
     """
     n = len(frames)
+    if n == 0:
+        raise ValueError("cannot average an empty frame group")
+    if n_error_blocks < 1:
+        raise ValueError("n_error_blocks must be at least 1")
     pieces = np.array_split(np.arange(n), min(n_error_blocks, n))
 
     piece_means = []
-    piece_k_sq = []
+    piece_sizes = []
     for piece in pieces:
         if len(piece) == 0:
             continue
         piece_means.append(
             {p: np.mean([frames[i][0][p] for i in piece], axis=0) for p in PAIRS}
         )
-        piece_k_sq.append(np.mean([frames[i][1] for i in piece], axis=0))
+        piece_sizes.append(len(piece))
 
     means, errors = {}, {}
     for p in PAIRS:
         stack = np.stack([pm[p] for pm in piece_means])
-        means[p] = stack.mean(axis=0)
-        errors[p] = (
-            stack.std(axis=0, ddof=1) / math.sqrt(len(stack))
-            if len(stack) > 1
-            else np.full(stack.shape[1], np.nan)
-        )
-    k_sq = np.mean(np.stack(piece_k_sq), axis=0)
+        means[p] = np.mean([frame[0][p] for frame in frames], axis=0)
+        if len(stack) > 1:
+            weights = np.asarray(piece_sizes, dtype=float)[:, None]
+            residual_sum = np.sum(weights * (stack - means[p]) ** 2, axis=0)
+            errors[p] = np.sqrt(
+                residual_sum / ((len(stack) - 1) * np.sum(weights))
+            )
+        else:
+            errors[p] = np.full(stack.shape[1], np.nan)
+    k_sq = np.mean([frame[1] for frame in frames], axis=0)
     return k_sq, means, errors
 
 
@@ -183,7 +191,21 @@ def write_dat(path: Path, k_sq, means, errors):
         for p in PAIRS:
             row += f" {means[p][i]:.6e} {errors[p][i]:.6e}"
         lines.append(row)
-    path.write_text("\n".join(lines) + "\n")
+    with path.open("x", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+
+
+def require_fresh_output_dir(path: Path) -> None:
+    """Prevent stale numbered blocks from being mixed with a new run."""
+    if not path.is_dir():
+        return
+    existing = sorted(path.glob("*-allSk.dat"))
+    if existing:
+        names = ", ".join(item.name for item in existing)
+        raise FileExistsError(
+            f"Refusing to mix or overwrite prior S(k) outputs in {path}: {names}. "
+            "Use a new --out-dir or move the old files first."
+        )
 
 
 def count_frames(path: Path, source: str) -> int:
@@ -200,7 +222,10 @@ def process_one(tag: str, root: Path, out_dir: Path, source: str,
                 block_ps: float, k_bins: int, n_error_blocks: int,
                 n_blocks_req: int | None = None,
                 last_ps: float | None = None) -> None:
-    path = root / tag / ("md.traj" if source == "traj" else "npt-mace.xyz")
+    if frame_ps <= 0.0:
+        raise ValueError("frame_ps must be positive")
+    path = root / tag / ("md.traj" if source == "traj" else "npt_mace.xyz")
+    require_fresh_output_dir(out_dir / tag)
 
 
     if last_ps:
@@ -216,6 +241,8 @@ def process_one(tag: str, root: Path, out_dir: Path, source: str,
 
 
     frames_per_block = int(round(block_ps / frame_ps))
+    if n_blocks_req is None and frames_per_block < 1:
+        raise ValueError("block_ps must span at least one frame")
 
     kgrid_idx, kgrid_2pi = make_kgrid(k_bins)
 
@@ -235,20 +262,26 @@ def process_one(tag: str, root: Path, out_dir: Path, source: str,
             rate = (n + 1) / (time.time() - t0)
             print(f"  {n + 1} frames  ({rate:.1f} fps)", end="\r", flush=True)
     n_frames = len(collected)
+    if n_frames == 0:
+        print(f"  {tag}: no frames in the requested window, skipped")
+        return
     print(f"  {n_frames} frames in {time.time() - t0:.0f} s"
           f"   composition: " + ", ".join(f"{s}={counts[s]}" for s in SPECIES),
           flush=True)
 
-    if n_frames == 0:
-        print(f"  {tag}: no frames in the requested window, skipped")
-        return
-
+    if n_blocks_req is not None:
+        if n_blocks_req < 1:
+            raise ValueError("n_blocks must be at least 1")
+        if n_blocks_req > n_frames:
+            raise ValueError(
+                f"n_blocks={n_blocks_req} exceeds the {n_frames} selected frames"
+            )
 
     k_sq, means, errors = average_group(collected, n_error_blocks)
     write_dat(out_dir / tag / f"{tag}-allSk.dat", k_sq, means, errors)
 
 
-    if n_blocks_req:
+    if n_blocks_req is not None:
         pieces = [p for p in np.array_split(np.arange(n_frames), n_blocks_req)]
         n_blocks = len(pieces)
         print(f"  splitting the window into {n_blocks} equal pieces of "
@@ -280,7 +313,7 @@ def main() -> None:
                    help="which systems to do (default: all of them)")
     p.add_argument("--out-dir", type=Path, required=True)
     p.add_argument("--source", choices=("traj", "xyz"), default="traj",
-                   help="md.traj is the same data as npt-mace.xyz but reads "
+                   help="md.traj is the same data as npt_mace.xyz but reads "
                         "faster and allows skipping straight to a frame")
     p.add_argument("--start-ps", type=float, default=START_PS)
     p.add_argument("--end-ps", type=float, default=END_PS,
