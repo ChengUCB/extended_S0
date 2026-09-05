@@ -1,6 +1,7 @@
-Data repository for 
-- "Chemical potentials from structure factors: I. Neutral multi-component mixtures"  — [arXiv:2608.08357](https://arxiv.org/abs/2608.08357)
-- "Chemical potentials from structure factors: II. Charged multi-component mixtures"
+Data repository for:
+
+- **"Chemical potentials from structure factors: I. Neutral multi-component mixtures"** — [arXiv:2608.08357](https://arxiv.org/abs/2608.08357)
+- **"Chemical potentials from structure factors: II. Charged multi-component mixtures"** — [arXiv:2608.30060](https://arxiv.org/abs/2608.30060)
 
 This repository computes composition-dependent chemical potentials of multicomponent mixtures directly from NPT molecular dynamics (MD) simulations using the extended-S0 method.
 
