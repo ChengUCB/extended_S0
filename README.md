@@ -26,6 +26,7 @@ For charged systems, we follow the same general workflow. However, step 3 is mod
 - [`Paracetamo-Water-Ethanol/`](Paracetamo-Water-Ethanol/) —  MD inputs, simulated S0 data, and non-stationary GP regression models for the paracetamol–water–ethanol system.
 - [`Molten_Salts/`](Molten_Salts/) —  MD inputs, simulated S0 data, Bare Coulomb(BC) fits, GP regression models, and structural analysis
 - [`HalideAqueousElectrolyte/`](HalideAqueousElectrolyte/) MD inputs, simulated S0 data, Bare Coulomb(BC) fits, and GP regression model
+- [`moltenSalt-MACELES/`](moltenSalt-MACELES/) MACELES MLIP trained on molten chloride salts
 
 
 ## 1.  Requirements
