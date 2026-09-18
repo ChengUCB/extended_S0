@@ -11,9 +11,8 @@ and the cutoff `0 < k^2 <= 0.02 cycles^2 A^-2`
 
 ## Repository layout
 
-| File/Directory | Contents |
+| Directory | Contents |
 |---|---|
-|`MoltenSalt-MACELES.model`| MACELES MLIP for chloride salts|
 | `MD_inputs/` | Packaged final-frame configurations and reusable MD scripts |
 | `MD_Sk_results/` | One combined S(k) CSV, one combined S(0) CSV, and analysis scripts |
 | `MD_gmix_results/` | Mixing-thermodynamics notebook and scripts |
