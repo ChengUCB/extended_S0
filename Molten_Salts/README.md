@@ -19,7 +19,7 @@ and the cutoff `0 < k^2 <= 0.02 cycles^2 A^-2`
 | `MD_structure_analysis/` | RDF, coordination, short-range-order data, figures, and scripts |
 
 Raw trajectories are not included because of their size. The tracked
-`MD_inputs/salt-MACELES.model` checkpoint has SHA-256
+MACELES model checkpoint has SHA-256
 `15dc639aae415aaf9f6a1e7b5f853836111313b4214dbdafcc1ad9553041a70b`;
 its original download/source record is not present, so the digest verifies
 file identity but not provenance. Treat it as a trusted-code artifact and load
