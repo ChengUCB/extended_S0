@@ -11,3 +11,7 @@ electrostatics (LES), trained on molten chloride salts.
 |---|---|
 | File | `salt-MACELES.model` |
 | SHA-256 | `15dc639aae415aaf9f6a1e7b5f853836111313b4214dbdafcc1ad9553041a70b` |
+
+The repository does not contain its original source/download metadata. The
+checkpoint uses Python/PyTorch serialization and must therefore be treated as
+trusted code: the hash checks identity, not authenticity or safety.
