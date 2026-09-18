@@ -3,7 +3,7 @@
 This repository contains processed molecular-dynamics data for molten
 LiCl-NaCl and MgCl2-NaCl mixtures at 1200 K and 1 bar. Every composition has
 6400 ions. All trajectories and derived results in this release use
-**MACELES**, with the potential provided in external folder **moltenSalt-MACELES** directory.
+**MACELES**.The potential is provided in the external [`moltenSalt-MACELES/`](../moltenSalt-MACELES/) directory.
 
 The distributed structure-factor and S(0) results use only the final 200 ps
 and the cutoff `0 < k^2 <= 0.02 cycles^2 A^-2`
