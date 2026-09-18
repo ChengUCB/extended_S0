@@ -33,7 +33,7 @@ run geometry optimization and 25,000 NVT steps, matching their source scripts.
 Example for MACELES at 400 atoms:
 
 ```bash
-python npt_md.py initial_configurations/0400.xyz /path/to/salt-r8c.model \
+python npt_md.py initial_configurations/0400.xyz /path/to/salt-MACELES.model \
   --output-dir runs/MACELES/0400
 ```
 
