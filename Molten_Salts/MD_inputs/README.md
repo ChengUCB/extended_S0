@@ -23,7 +23,7 @@ tracked MACELES model checkpoint:
 
 ```bash
 python scripts/npt_md.py initial_configurations/LiCl_NaCl/li160.xyz \
-  salt-MACELES.model --output-dir runs/li160
+   /path/to/salt-MACELES.model --output-dir runs/li160
 ```
 
 Temperature, pressure, timestep, reporting interval, and NPT step count must
