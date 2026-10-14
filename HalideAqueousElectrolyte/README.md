@@ -42,7 +42,10 @@ block count; choose a new `--out-dir` or move the previous result set.
 - `data/S0_NaClWater_individual_OZ_split*.csv`
 - `data/mu_ex_NaClWater_S0_validation_split0.csv`
 - `data/x_ion_mu_ex_debye.csv`
+- `data/S0_mu_ex_NaCl.csv` (read by `plot_fig2.py`)
+- `data/reference_mu_ex_NaCl.csv` (read by `plot_fig2.py`)
 - `scripts/`: BC, OZ, and helper extraction scripts.
+- `scripts/plot_fig2.py`: figure 2 plotting code 
 - `notebooks/test-gp.ipynb`: NaCl(aq) chemical-potential workflow.
 
 ### `NaClIWater/`
